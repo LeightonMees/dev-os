@@ -1,0 +1,46 @@
+{
+  "name": "dev",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "DEV: a local development operating system. One core, a CLI and a desktop app.",
+  "license": "Apache-2.0",
+  "author": "Leighton Mees",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LeightonMees/dev-os.git"
+  },
+  "homepage": "https://github.com/LeightonMees/dev-os#readme",
+  "bugs": {
+    "url": "https://github.com/LeightonMees/dev-os/issues"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "bin": {
+    "dev": "./apps/cli/bin/dev.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "node apps/cli/bin/dev.mjs",
+    "test": "node --test --test-reporter=spec \"packages/core/tests/**/*.test.ts\" \"apps/cli/tests/**/*.test.ts\" \"apps/control-plane/tests/**/*.test.ts\" \"tests/**/*.test.ts\"",
+    "test:core": "node --test \"packages/core/tests/**/*.test.ts\"",
+    "test:integration": "node --test \"tests/**/*.test.ts\"",
+    "test:desktop": "npm --workspace apps/desktop run test",
+    "typecheck": "tsc -p tsconfig.json --noEmit && npm --workspace apps/desktop run typecheck",
+    "lint": "oxlint packages apps/cli apps/control-plane apps/desktop/src tests",
+    "check": "npm run lint && npm run typecheck && npm test && npm run test:desktop",
+    "control-plane": "node apps/control-plane/src/main.ts",
+    "ui": "node apps/cli/bin/dev.mjs ui",
+    "desktop:dev": "npm --workspace apps/desktop run tauri dev",
+    "desktop:build": "npm --workspace apps/desktop run tauri build"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "oxlint": "^1.81.0",
+    "typescript": "^7.0.2"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@dev/cli",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The `dev` command: DEV without the desktop app.",
+  "bin": {
+    "dev": "./bin/dev.mjs"
+  },
+  "dependencies": {
+    "@dev/core": "*"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

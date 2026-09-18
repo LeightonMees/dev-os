@@ -1,0 +1,16 @@
+{
+  "name": "@dev/control-plane",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local HTTP + SSE service over the DEV core. The desktop app and the CLI both talk to it.",
+  "scripts": {
+    "start": "node src/main.ts"
+  },
+  "dependencies": {
+    "@dev/core": "*"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

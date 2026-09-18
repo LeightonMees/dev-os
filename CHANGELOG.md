@@ -1,0 +1,67 @@
+# Changelog
+
+All notable changes to DEV are recorded here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+- **The brief is editable.** The composer showed the assembled prompt read-only, so you could see a
+  brief was wrong and had no way to correct it except by changing the inputs and hoping. A task now
+  carries `promptOverride`: edit the brief, save, and that exact text is what the worker receives,
+  with assembly skipped and the run log saying so. "Reset to assembled" clears it. The section
+  breakdown still shows what DEV *would* have sent, so an override stays reviewable.
+
+### Changed
+- **Attached files are excerpted by relevance to the task, not by position in the file.** Head
+  truncation assumed the useful part of a document sits at the top. That holds for a source file and
+  fails for the reference documents planners actually attach. Files are now split on markdown
+  headings, each section scored on how much of the task's own vocabulary it uses, and the best kept
+  in document order until the budget is spent. The opening section is always kept, and every gap is
+  marked so a worker knows it holds an excerpt rather than a whole file. Measured on the real
+  16,953-character MASTER PLAN: the section carrying the priority order survives, in **609 tokens
+  instead of 2,000**. The scoring is lexical, not semantic — it keeps sections that share wording
+  with the task, which is a heuristic and not comprehension.
+- **The planner is told what `files` costs.** It was shown `files: ["relative/path/to/file"]` with no
+  explanation of the field, so it listed background reading and every entry was pasted into the
+  worker's brief in full. It now reads: the files the task will actually create or edit, never
+  things it merely refers to.
+- **One document can no longer own a whole brief.** `context.maxFileTokens` drops from 2,000 to 600.
+  Measured on 2026-09-18: a task whose entire job was "decide the next milestone for Agency" shipped
+  ~3,199 tokens, of which ~2,000 were the first 8,000 characters of a 17,160-character MASTER PLAN —
+  62% of the brief, to answer a question the one-line decisions section had already answered.
+- **The project switcher only appears where a project is the subject.** It rendered on all nine
+  sections, which put a project picker on Settings, Workers and Resources — none of which read the
+  current project at all — and a second, redundant one on Overview, whose whole body is already a
+  searchable project list.
+
+- **First run seeds a guide instead of an empty board.** A new installation gets a real project,
+  "Getting started with DEV", whose tasks are the setup steps — with dependencies, so the guide also
+  demonstrates how work unlocks. It names no AI provider as required; a local model, a CLI agent, a
+  hosted key and no AI at all are presented as equally valid. `dev welcome` creates it on demand and
+  is idempotent.
+- **Anthropic as a first-class API provider**, via its OpenAI-compatible endpoint. Ships disabled,
+  like every paid provider.
+- **The artifact zone renders what a run actually produced**: HTML and SVG in a sandboxed frame,
+  images, PDFs and Markdown, with a source editor beside the preview and a pan/zoom canvas of every
+  drawable artifact. Editing saves a new version and never overwrites the original file, so evidence
+  citing an execution keeps pointing at what ran.
+- Open-source release scaffolding: Apache-2.0 licence, security policy, contributing guide, code of
+  conduct, issue and pull-request templates, and CI on Windows and Linux.
+- `scripts/prepare-release.mjs` builds a publishable copy with a fresh history and refuses to
+  proceed if anything private or secret-shaped is found in it.
+
+### Fixed
+- **The control plane could be driven by any web page you had open.** It answered with
+  `Access-Control-Allow-Origin: *` and no authentication, so a page in your browser could reach
+  loopback and create or run tasks on your machine. It now refuses any request carrying a browser
+  origin that is not DEV's own window, and any request whose `Host` is not loopback, which also
+  closes DNS rebinding. Local clients such as the CLI send no origin and are unaffected.
+- **Card dragging did not work in the desktop app.** Tauri enables an OS-level file-drop handler by
+  default, and on Windows it swallows HTML5 drag events. Disabled on the main window.
+- On a cold start the app fetched tasks for the project id remembered in browser storage before
+  checking it still existed, producing failed requests after a project was deleted or `DEV_HOME`
+  changed.
+- The Markdown preview's code-fence parser never advanced its cursor and could exhaust memory on a
+  fenced block.

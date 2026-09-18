@@ -1,0 +1,20 @@
+# local state (database, logs, artifacts, config) - never committed
+.dev-home/
+.env
+.env.*
+!.env.example
+
+# dependencies and build output
+node_modules/
+dist/
+target/
+apps/desktop/src-tauri/gen/schemas/
+
+# editor / OS noise
+.DS_Store
+Thumbs.db
+*.swp
+*.log
+
+# screenshots from visual QA sessions
+.playwright-mcp/

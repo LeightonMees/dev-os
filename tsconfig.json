@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "include": [
+    "packages/core/src/**/*.ts",
+    "packages/core/tests/**/*.ts",
+    "apps/cli/src/**/*.ts",
+    "apps/cli/tests/**/*.ts",
+    "apps/control-plane/src/**/*.ts",
+    "apps/control-plane/tests/**/*.ts",
+    "tests/**/*.ts"
+  ]
+}
