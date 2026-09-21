@@ -57,7 +57,7 @@
 `GET /health`, `GET /api/status`, `GET /api/doctor`, `GET|PATCH /api/config`
 `GET|POST /api/projects`, `GET|PATCH|DELETE /api/projects/:id`, `/git`, `/git/diff`, `/git/log`, `/git/commit`, `/decisions`, `POST /auto`, `POST /auto/stop`
 `GET|POST /api/tasks`, `GET|PATCH|DELETE /api/tasks/:id`, `/status`, `/run`, `/retry`, `/cancel`, `/approve`, `/reject`, `/deps`, `/context`, `/log`
-`GET /api/executions`, `GET /api/workers`, `POST /api/workers/:id/check`, `GET /api/resources/search?q=`, `GET /api/artifacts`, `/content`, `/raw`, `/versions`, `POST /api/artifacts/:id/revise`, `GET /api/approvals`, `POST /api/plan`, `POST /api/plan/apply`
+`GET /api/executions`, `GET /api/workers`, `POST /api/workers/:id/check`, `GET /api/resources/search?q=`, `GET /api/artifacts`, `/content`, `/raw`, `/versions`, `POST /api/artifacts/:id/revise`, `POST /api/projects/:id/git/push` (gated), `POST /api/onboarding/seed`, `GET|POST /api/flows`, `POST /api/flows/:id/run`, `GET /api/approvals`, `POST /api/plan`, `POST /api/plan/apply`
 `GET /api/events`, `GET /api/events/stream` (SSE)
 
 ## Desktop

@@ -23,6 +23,11 @@ DEV knows how to develop; it does not know in advance what will be developed. Pr
 13. `dev doctor`: home, database, node, git, every worker, Nexus, shell, projects, cargo, WebView2, control plane.
 14. Settings: every config key editable in the app and via `dev config set`.
 15. Tests: core, CLI, control plane, desktop components, integration loop.
+16. Isolation: `git.isolation=worktree` runs each task in its own git worktree on `dev/<task>`, commits there, leaves the checkout untouched; plain directories fall back in place and say so.
+17. Approval gates: commits (`approvals.requireForCommit`), pushes (`approvals.requireForPush`, on by default, waivable only globally) and gated commands (`approvals.gatedCommands`) file an approval; approving performs the action, denying blocks the task with the reason.
+18. Flows: shell, prompt, condition and human ("Ask me") steps; run from the app or `dev flow run`; export/import as JSON.
+19. Artifacts: typed previews (HTML/SVG/image/PDF/Markdown/GLB), versioned edits that never overwrite the original, a canvas; `dev artifacts` in the CLI.
+20. First run seeds a provider-neutral "Getting started with DEV" project; no default setting points at any particular machine.
 
 ## Must not
 
