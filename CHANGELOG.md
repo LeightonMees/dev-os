@@ -6,6 +6,11 @@ All notable changes to DEV are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-21
+
+The flow editor's first version is complete, auto-runs can go parallel under worktree isolation, and
+the first-run guide ends on the safety settings.
+
 ### Added
 - **Parallel auto-runs** (`workers.concurrency`, or `dev auto --parallel n`). Independent tasks run side
   by side — only where `git.isolation` is `worktree`, so no two workers ever share a checkout. In place
@@ -153,6 +158,7 @@ tested, and still moving.
 - The Markdown preview's code-fence parser never advanced its cursor and could exhaust memory on a
   fenced block.
 
-[Unreleased]: https://github.com/LeightonMees/dev-os/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/LeightonMees/dev-os/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/LeightonMees/dev-os/releases/tag/v0.3.0
 [0.2.0]: https://github.com/LeightonMees/dev-os/releases/tag/v0.2.0
 [0.1.0]: https://github.com/LeightonMees/dev-os/releases/tag/v0.1.0
