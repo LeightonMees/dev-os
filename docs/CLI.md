@@ -35,6 +35,7 @@ dev flow export <id|name> > flow.json | import flow.json [--name]      flows as 
 dev git status | diff [--stat] | log | branch [name] | commit "<msg>" [--task <id>]
 dev decision list | add "<title>" --reason .. --tags a,b
 dev approvals [approve|deny <id>]
+dev auto --all                                                              every active project in turn
 dev git push                                                                push the current branch (sets upstream on first push)
 dev approvals approve|deny <id> [note or answer]                        the words after the id travel with the decision
 

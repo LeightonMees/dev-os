@@ -210,3 +210,34 @@ test("a pending question can be answered from the CLI, and the answer travels wi
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test("dev auto --all runs every active project in turn and reports per project", () => {
+  const home = tempRoot();
+  const a = tempRoot();
+  const b = tempRoot();
+  try {
+    for (const dir of [a, b]) {
+      execFileSync("git", ["init", "-q", "-b", "main"], { cwd: dir });
+      writeFileSync(join(dir, "README.md"), "# t\n");
+    }
+    const pa = JSON.parse(dev(home, ["project", "add", a, "--name", "alpha", "--json"]).out) as { id: string };
+    const pb = JSON.parse(dev(home, ["project", "add", b, "--name", "beta", "--json"]).out) as { id: string };
+    dev(home, ["task", "add", "a1", "--project", pa.id, "--command", `${nodeExe} -e "console.log('a')"`]);
+    dev(home, ["task", "add", "b1", "--project", pb.id, "--command", `${nodeExe} -e "console.log('b')"`]);
+    dev(home, ["task", "add", "b2", "--project", pb.id, "--command", `${nodeExe} -e "process.exit(3)"`]);
+
+    const result = dev(home, ["auto", "--all", "--json"], { expectFail: true });
+    const report = JSON.parse(result.out) as { projects: { name: string; ran: number; blocked: number; stoppedBecause: string }[] };
+    const byName = Object.fromEntries(report.projects.map((p) => [p.name, p]));
+    assert.equal(byName.alpha?.ran, 1);
+    assert.equal(byName.alpha?.blocked, 0);
+    assert.equal(byName.beta?.ran, 2);
+    assert.equal(byName.beta?.blocked, 1, "the failing command blocks its task and is counted");
+    assert.equal(result.code, 2, "a blocked task anywhere makes the exit code say so");
+
+    const alphaTasks = JSON.parse(dev(home, ["task", "list", "--project", pa.id, "--json"]).out) as { status: string }[];
+    assert.deepEqual(alphaTasks.map((t) => t.status), ["DONE"]);
+  } finally {
+    for (const dir of [home, a, b]) rmSync(dir, { recursive: true, force: true });
+  }
+});

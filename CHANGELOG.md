@@ -20,6 +20,7 @@ All notable changes to DEV are recorded here. The format follows
 - **Approval gate on commits** (`approvals.requireForCommit`). Commit in the Git view files an approval
   instead of committing; approving it performs the commit with that message, denying it drops it.
   Nothing is half-done in between.
+- `dev auto --all` runs every active project in turn, one worker at a time, and reports per project.
 - **Codex output is structured.** `codex exec --json` events are parsed: the agent's final message is
   the summary, commands it ran show as commands with their output, token usage is recorded, and a
   turn Codex reports as failed fails the task with Codex's own message (for example, a model the

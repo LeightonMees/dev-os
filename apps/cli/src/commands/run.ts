@@ -132,6 +132,7 @@ export async function cancelCommand(ctx: CliContext, ref: string | undefined): P
 
 /** `dev auto`: run every runnable task in dependency order until none remain. */
 export async function autoCommand(ctx: CliContext): Promise<number> {
+  if (flagBool(ctx.flags, "all")) return autoAll(ctx);
   const project = currentProject(ctx);
   if (!project) throw new UsageError("No project");
   const maxTasks = flagNumber(ctx.flags, "max");
@@ -205,4 +206,57 @@ function autoStopSignal(client: ControlPlaneClient, projectId: string): AbortSig
   };
   void poll();
   return controller.signal;
+}
+
+/**
+ * Every active project with a repository, one after another, in this process.
+ * Sequential on purpose: one worker at a time on this machine is the V1 rule,
+ * and it keeps the output readable. A project with nothing runnable is listed
+ * and skipped rather than silently omitted.
+ */
+async function autoAll(ctx: CliContext): Promise<number> {
+  const maxTasks = flagNumber(ctx.flags, "max");
+  const workerId = flagString(ctx.flags, "worker") ?? null;
+  const promoteBacklog = flagBool(ctx.flags, "promote-backlog") || flagBool(ctx.flags, "autopilot");
+  const projects = ctx.dev.projects.list().filter((p) => p.lifecycle === "ACTIVE" && p.path);
+  if (projects.length === 0) {
+    if (ctx.json) printJson({ projects: [] });
+    else println(c.dim("No active project has a repository to run in."));
+    return 0;
+  }
+  const controller = new AbortController();
+  process.on("SIGINT", () => controller.abort());
+  const off = ctx.json ? () => {} : ctx.dev.events.on(printEvent);
+  const results: { projectId: string; name: string; ran: number; blocked: number; stoppedBecause: string }[] = [];
+  try {
+    for (const project of projects) {
+      if (controller.signal.aborted) break;
+      const runnable = ctx.dev.tasks.runnable(project.id).length;
+      if (runnable === 0 && !promoteBacklog) {
+        results.push({ projectId: project.id, name: project.name, ran: 0, blocked: 0, stoppedBecause: "no-runnable-tasks" });
+        if (!ctx.json) eprintln(c.dim(`· ${project.name}: nothing runnable`));
+        continue;
+      }
+      if (!ctx.json) eprintln(`
+${c.cyan("▶")} ${c.bold(project.name)}: ${runnable} runnable now`);
+      const report = await autoRun(ctx.dev, {
+        projectId: project.id,
+        maxTasks,
+        workerId,
+        signal: controller.signal,
+        continueOnFailure: !flagBool(ctx.flags, "stop-on-failure"),
+        promoteBacklog,
+        onTaskStart: (t) => (ctx.json ? undefined : eprintln(`  ${c.cyan("▶")} ${t.id} ${t.title}`)),
+      });
+      results.push({ projectId: project.id, name: project.name, ran: report.ran.length, blocked: report.ran.filter((r) => r.status === "BLOCKED").length, stoppedBecause: report.stoppedBecause });
+    }
+  } finally {
+    off();
+  }
+  if (ctx.json) printJson({ projects: results });
+  else {
+    println("");
+    for (const r of results) println(`  ${r.blocked ? c.red("✗") : r.ran ? c.green("✓") : c.dim("·")} ${truncate(r.name, 32).padEnd(32)} ran ${r.ran}${r.blocked ? c.red(`  blocked ${r.blocked}`) : ""}  ${c.dim(r.stoppedBecause)}`);
+  }
+  return results.some((r) => r.blocked > 0) ? 2 : 0;
 }
