@@ -12,7 +12,7 @@ export function OfflineView() {
           <b>DEV could not reach its control plane at {api.baseUrl}.</b>
           <br />
           {connectionError && <span className="err">{connectionError}</span>}
-          <p>The desktop app starts it automatically. If it keeps failing, start it by hand to see the error:</p>
+          <p>The app tries to start it when it opens (that needs Node 24+ on your PATH and this repository next to the app). If it keeps failing, start it by hand in a terminal to see the real error:</p>
           <code>dev control-plane start --foreground</code>
           <p>
             <button className="btn primary" onClick={() => refresh()}>

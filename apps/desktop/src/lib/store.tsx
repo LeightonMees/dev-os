@@ -185,6 +185,8 @@ export function StoreProvider({ children, initialBaseUrl }: { children: ReactNod
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastId = useRef(0);
   const refreshTimer = useRef<number | null>(null);
+  /** Why the native side could not start the control plane, if it could not. */
+  const startErrorRef = useRef<string | null>(null);
   const connectionRef = useRef(connection);
   connectionRef.current = connection;
 
@@ -225,7 +227,9 @@ export function StoreProvider({ children, initialBaseUrl }: { children: ReactNod
       }
     } catch (error) {
       setConnection("offline");
-      setConnectionError((error as Error).message);
+      const fetchError = (error as Error).message;
+      const startError = startErrorRef.current;
+      setConnectionError(startError ? `${startError} (${fetchError})` : fetchError);
     }
   }, [api]);
 
@@ -245,6 +249,10 @@ export function StoreProvider({ children, initialBaseUrl }: { children: ReactNod
       const info = await ensureControlPlane();
       if (cancelled) return;
       if (info?.url) api.baseUrl = info.url;
+      // The native side's reason for not starting the control plane is the
+      // useful fact here. Remember it so a later "Failed to fetch" from refresh()
+      // is shown alongside it rather than in its place.
+      startErrorRef.current = info?.error ?? null;
       if (info?.error) setConnectionError(info.error);
       await refresh();
       if (cancelled) return;
