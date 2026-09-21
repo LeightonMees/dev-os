@@ -20,6 +20,10 @@ All notable changes to DEV are recorded here. The format follows
 - **Approval gate on commits** (`approvals.requireForCommit`). Commit in the Git view files an approval
   instead of committing; approving it performs the commit with that message, denying it drops it.
   Nothing is half-done in between.
+- **Codex output is structured.** `codex exec --json` events are parsed: the agent's final message is
+  the summary, commands it ran show as commands with their output, token usage is recorded, and a
+  turn Codex reports as failed fails the task with Codex's own message (for example, a model the
+  account cannot use) instead of a buried line of text.
 - **Routing learns from this machine.** With no preference stated, a worker that has finished
   its runs here is tried before one a public benchmark merely recommends: success rate first, then
   speed, after at least three finished runs. The routing reason says so in plain words.

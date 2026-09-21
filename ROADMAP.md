@@ -10,8 +10,7 @@ Kept deliberately small. Long-term ideas live here as one line each, not as tick
 ## NEXT
 
 - Interactive flows: n8n-style workflows of shell commands, AI prompts, human inputs, conditions and loops, with a canvas and a live run view (Executable Agent Workflows, "Flow editor V1").
-- Approval gates on push and deploy (commits are gated today via `approvals.requireForCommit`).
-- Codex structured output parsing (today Codex output is captured as text).
+- Approval gates on a project-defined list of consequential commands (deploys, migrations); commits and pushes are gated today.
 
 ## LATER
 

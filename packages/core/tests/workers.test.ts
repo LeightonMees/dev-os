@@ -292,3 +292,34 @@ test("routing: with no preference stated, a worker's record on this machine outr
     cleanup();
   }
 });
+
+test("codex --json events become the final message, a failed turn, readable commands and usage", async () => {
+  const { CodexEventParser } = await import("../src/workers/codex.ts");
+  const out: string[] = [];
+  const events: string[] = [];
+  const parser = new CodexEventParser({ onOutput: (chunk, stream) => out.push(`${stream}:${chunk}`), onEvent: (e) => events.push(`${e.kind}:${e.text}`) });
+  parser.feed('{"type":"thread.started","thread_id":"t1"}\n{"type":"turn.started"}\n');
+  parser.feed('{"type":"item.started","item":{"id":"i1","type":"command_execution","command":"npm test"}}\n');
+  parser.feed('{"type":"item.completed","item":{"id":"i1","type":"command_execution","command":"npm test","aggregated_output":"3 passing\n"}}\n');
+  parser.feed('{"type":"item.completed","item":{"id":"i2","type":"agent_message","text":"Added the endpoint and tests pass."}}\n');
+  parser.feed('{"type":"turn.completed","usage":{"input_tokens":1200,"cached_input_tokens":800,"output_tokens":90}}\n');
+  parser.flush();
+  assert.equal(parser.finalText, "Added the endpoint and tests pass.");
+  assert.equal(parser.failed, false);
+  assert.deepEqual(parser.usage, { input_tokens: 1200, cached_input_tokens: 800, output_tokens: 90 });
+  assert.ok(out.some((l) => l.includes("→ npm test")), "commands are shown as commands");
+  assert.ok(out.some((l) => l.includes("3 passing")), "and their output follows");
+  assert.deepEqual(events, ["tool:npm test", "assistant:Added the endpoint and tests pass."]);
+
+  // The real-world failure: a model the account cannot use. Exit code may be 0; the turn failed.
+  const failing = new CodexEventParser({ onOutput: (chunk, stream) => out.push(`${stream}:${chunk}`) });
+  failing.feed('{"type":"item.completed","item":{"id":"e","type":"error","message":"Model metadata for `gpt-x` not found."}}\n');
+  failing.feed('{"type":"turn.failed","error":{"message":"{\\"type\\":\\"error\\",\\"status\\":400,\\"error\\":{\\"type\\":\\"invalid_request_error\\",\\"message\\":\\"The gpt-x model is not supported when using Codex with a ChatGPT account.\\"}}"}}\n');
+  assert.equal(failing.failed, true);
+  assert.equal(failing.error, "The gpt-x model is not supported when using Codex with a ChatGPT account.", "the API's message, not the JSON envelope");
+
+  // Lines that are not JSON pass straight through.
+  const plain = new CodexEventParser({ onOutput: (chunk) => out.push(chunk) });
+  plain.feed("warning: something\n");
+  assert.ok(out.includes("warning: something\n"));
+});
