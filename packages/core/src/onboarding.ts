@@ -90,6 +90,17 @@ const STEPS: Step[] = [
     requirements: [
       "`dev plan \"<goal>\"` proposes a small, bounded task list and asks before saving anything.",
       "`dev auto` then runs everything runnable in dependency order.",
+    ],
+  },
+  {
+    title: "Decide how much to trust it unattended",
+    outcome: "You know which of the three safety settings are on for your project, and why.",
+    after: 6,
+    requirements: [
+      "Where a task runs (`git.isolation`): `worktree` gives every run its own git worktree on a branch named dev/<task>, so a worker can never leave your checkout half-edited. The safe choice for autopilot.",
+      "Commands that wait for approval (`approvals.gatedCommands`): a shell task containing `git push`, `npm publish`, `rm -rf` and the like pauses in Attention until you say yes or no.",
+      "Pushes wait for approval by default (`approvals.requireForPush`); commits can too (`approvals.requireForCommit`).",
+      "All three live in Settings, and per project in `.dev/config.json`. Nothing here depends on which AI you chose.",
       "Delete this guide project whenever you like — it is an ordinary project.",
     ],
   },

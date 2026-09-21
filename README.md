@@ -76,6 +76,11 @@ next action, not a shrug.
 **Workers are interchangeable.** A task says what it needs; routing picks a healthy worker that can
 do it. If one provider is rate-limited, another takes the work.
 
+**Unattended runs stop at the edge of your machine.** With `git.isolation: worktree` every run gets
+its own git worktree and branch, so a worker can never leave your checkout half-edited. Pushes wait
+for your approval by default; so does any command containing `git push`, `npm publish`, `rm -rf` or
+whatever else you list. Approving performs the action; denying blocks the task with your reason.
+
 ## Works with the AI you already have
 
 DEV has no favourite model, and no provider is required — it will run shell tasks and local models

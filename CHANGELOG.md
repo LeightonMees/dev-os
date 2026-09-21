@@ -6,6 +6,10 @@ All notable changes to DEV are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- The first-run guide ends with a step on the three safety settings (worktree isolation, gated
+  commands, gated pushes/commits), so a new user decides how much to trust autopilot before using it.
+
 ### Fixed
 - A project without a directory shows "no repository yet" in the Git view instead of an empty status
   table, and the Editor no longer requests its files.
