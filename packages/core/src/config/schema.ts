@@ -273,7 +273,8 @@ export const CONFIG_SCHEMA = {
       type: "number",
       default: 1,
       min: 1,
-      description: "How many independent tasks may run at once. Never two on the same repository.",
+      description: "How many independent tasks an auto-run may run at once. Above 1 takes effect only where git.isolation is worktree, so no two workers ever share a checkout; elsewhere it is clamped to 1 and the run says so.",
+      active: true,
     }),
     claudeCode: {
       command: field<string>({

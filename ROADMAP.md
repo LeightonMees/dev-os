@@ -9,7 +9,6 @@ Kept deliberately small. Long-term ideas live here as one line each, not as tick
 
 ## NEXT
 
-- Concurrency beyond one worker per repository (`dev auto --all` runs projects in turn today; worktree isolation makes parallel runs safe to attempt).
 - Direct manipulation on the artifact canvas: select and edit elements inside an artboard, not just its source.
 
 ## LATER

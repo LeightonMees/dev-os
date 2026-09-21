@@ -1,5 +1,6 @@
 import type { Dev } from "../dev.ts";
 import type { Execution, Task } from "../schemas.ts";
+import { resolveConfigFor } from "../config.ts";
 import { runTask } from "./runner.ts";
 
 export interface AutoRunOptions {
@@ -16,6 +17,12 @@ export interface AutoRunOptions {
    * Tasks carrying `needsHuman` are never promoted; they wait for an answer.
    */
   promoteBacklog?: boolean;
+  /**
+   * How many tasks may run at once. Above 1 needs `git.isolation=worktree` on the project, because
+   * two workers editing one checkout would each claim the other's changes; in place, this is
+   * clamped to 1 and the report says so. Defaults to `workers.concurrency`.
+   */
+  concurrency?: number;
   onTaskStart?: (task: Task) => void;
   onTaskEnd?: (task: Task, execution: Execution | null) => void;
   onPromote?: (task: Task) => void;
@@ -45,77 +52,73 @@ export async function autoRun(dev: Dev, options: AutoRunOptions): Promise<AutoRu
   const report: AutoRunReport = { ran: [], stoppedBecause: "no-runnable-tasks", detail: null };
   const max = options.maxTasks ?? Number.POSITIVE_INFINITY;
   const attempted = new Set<string>();
+  const project = dev.projects.get(options.projectId);
+  const isolation = project?.path ? resolveConfigFor({ home: dev.home, projectDir: project.path }).config.git.isolation : "in-place";
+  const wanted = Math.max(1, Math.floor(options.concurrency ?? dev.config.workers.concurrency ?? 1));
+  const concurrency = isolation === "worktree" ? wanted : 1;
+  if (wanted > 1 && concurrency === 1) report.detail = `ran one at a time: ${wanted} in parallel needs git.isolation=worktree on this project`;
   dev.events.emit("AUTO_RUN_STARTED", {
     projectId: options.projectId,
-    data: { promoteBacklog: options.promoteBacklog === true, maxTasks: Number.isFinite(max) ? max : null },
+    data: { promoteBacklog: options.promoteBacklog === true, maxTasks: Number.isFinite(max) ? max : null, concurrency },
   });
+  // In flight: one entry per running task, resolving to what happened to it.
+  const inFlight = new Map<string, Promise<{ task: Task; execution: Execution | null }>>();
+  const launch = (task: Task) => {
+    attempted.add(task.id);
+    options.onTaskStart?.(task);
+    inFlight.set(
+      task.id,
+      runTask(dev, task.id, { workerId: options.workerId ?? null, signal: options.signal })
+        .then((execution) => ({ task, execution }))
+        .catch(() => ({ task, execution: null })),
+    );
+  };
   try {
-    while (report.ran.length < max) {
+    for (;;) {
       if (options.signal?.aborted) {
         report.stoppedBecause = "cancelled";
         break;
       }
-      let next = dev.tasks.runnable(options.projectId).find((t) => !attempted.has(t.id));
-      if (!next && options.promoteBacklog) next = promoteNext(dev, options, attempted);
-      if (!next) break;
-      attempted.add(next.id);
-      options.onTaskStart?.(next);
-      let execution: Execution | null = null;
-      try {
-        execution = await runTask(dev, next.id, { workerId: options.workerId ?? null, signal: options.signal });
-      } catch (error) {
-        const live = dev.tasks.get(next.id) as Task;
-        report.ran.push({ taskId: next.id, title: next.title, status: live.status, executionId: "" });
-        options.onTaskEnd?.(live, null);
-        if (options.continueOnFailure === false) {
-          report.stoppedBecause = "blocked";
-          break;
-        }
-        void error;
-        continue;
+      // Fill the slots. Runnable tasks are independent of each other by definition (their
+      // dependencies are done), so they may run side by side.
+      while (inFlight.size < concurrency && report.ran.length + inFlight.size < max) {
+        let next = dev.tasks.runnable(options.projectId).find((t) => !attempted.has(t.id));
+        if (!next && options.promoteBacklog && inFlight.size === 0) next = promoteNext(dev, options, attempted);
+        if (!next) break;
+        launch(next);
       }
-      const live = dev.tasks.get(next.id) as Task;
-      report.ran.push({ taskId: next.id, title: next.title, status: live.status, executionId: execution.id });
-      options.onTaskEnd?.(live, execution);
+      if (inFlight.size === 0) {
+        if (report.ran.length >= max) report.stoppedBecause = "max-tasks";
+        break;
+      }
+      const finished = await Promise.race(inFlight.values());
+      inFlight.delete(finished.task.id);
+      const live = dev.tasks.get(finished.task.id) as Task;
+      report.ran.push({ taskId: finished.task.id, title: finished.task.title, status: live.status, executionId: finished.execution?.id ?? "" });
+      options.onTaskEnd?.(live, finished.execution);
       if (live.status === "BLOCKED" && options.continueOnFailure === false) {
         report.stoppedBecause = "blocked";
         break;
       }
     }
-    if (report.ran.length >= max && report.stoppedBecause === "no-runnable-tasks") report.stoppedBecause = "max-tasks";
-    report.detail = finishDetail(report, options.promoteBacklog === true);
-    return report;
+    // A stop with work still running: let it finish and record it, so nothing is lost.
+    for (const settled of await Promise.all(inFlight.values())) {
+      const live = dev.tasks.get(settled.task.id) as Task;
+      report.ran.push({ taskId: settled.task.id, title: settled.task.title, status: live.status, executionId: settled.execution?.id ?? "" });
+      options.onTaskEnd?.(live, settled.execution);
+    }
+    inFlight.clear();
+    // A run that did nothing must say why, so the UI can show a reason instead of "started".
+    if (report.ran.length === 0 && report.stoppedBecause === "no-runnable-tasks") report.detail = emptyAutoRunDetail(options.promoteBacklog === true);
   } finally {
-    const blocked = report.ran.filter((r) => r.status === "BLOCKED").length;
     dev.events.emit("AUTO_RUN_FINISHED", {
       projectId: options.projectId,
-      data: {
-        promoteBacklog: options.promoteBacklog === true,
-        ran: report.ran.length,
-        blocked,
-        stoppedBecause: report.stoppedBecause,
-        detail: report.detail,
-        titles: report.ran.filter((r) => r.status === "BLOCKED").map((r) => r.title).slice(0, 8),
-      },
+      data: { ran: report.ran.length, blocked: report.ran.filter((r) => r.status === "BLOCKED").length, stoppedBecause: report.stoppedBecause, detail: report.detail },
     });
   }
+  return report;
 }
 
-function finishDetail(report: AutoRunReport, promoteBacklog: boolean): string | null {
-  if (report.ran.length === 0) return emptyAutoRunDetail(promoteBacklog);
-  const blocked = report.ran.filter((r) => r.status === "BLOCKED");
-  if (blocked.length === report.ran.length) {
-    const names = blocked.map((r) => r.title).slice(0, 3).join("; ");
-    return `Every task in this run blocked or timed out${names ? `: ${names}` : ""}.`;
-  }
-  return null;
-}
-
-/**
- * Autopilot promotion: the first BACKLOG task, in board order, whose dependencies are all
- * satisfied and which does not need the user. Returns it as READY, or undefined when the
- * backlog has nothing that can legitimately start.
- */
 function promoteNext(dev: Dev, options: AutoRunOptions, attempted: Set<string>): Task | undefined {
   const candidate = dev.tasks
     .list({ projectId: options.projectId, status: "BACKLOG", limit: null })

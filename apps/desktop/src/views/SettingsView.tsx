@@ -19,6 +19,7 @@ const GROUPS: { title: string; fields: Field[] }[] = [
     fields: [
       { key: "workers.preferences", label: "Preference order (fallback)", hint: 'Used when a kind of work has no list of its own. Leave it empty ([]) to let the benchmark evidence below decide, or state your own order as a JSON array, e.g. ["codex","claude-code","shell"]. A worker set on a task always wins over both.' },
       { key: "workers.preferencesByCapability", label: "Who is best at what", type: "capability-preferences", hint: "Workers are not equally good at everything. Set the order per kind of work and DEV routes by the task's kind: decisions and epics ask for planning, prep tasks ask for research, the rest ask for code." },
+      { key: "workers.concurrency", label: "Concurrent runs", type: "number", hint: "How many independent tasks an auto-run may run at once. Takes effect only where the project's isolation is worktree, so no two workers share a checkout; elsewhere runs stay one at a time and say so." },
       { key: "workers.timeoutMs", label: "Shell timeout (minutes)", type: "minutes", hint: "Hung commands die after this. Default 30." },
       { key: "workers.agentTimeoutMs", label: "Agent timeout (minutes)", type: "minutes", hint: "Claude Code, Codex, Grok and the other agents. Default 120. A retry after a timeout doubles once, up to 4 hours." },
       { key: "workers.claudeCode.command", label: "Claude Code command" },

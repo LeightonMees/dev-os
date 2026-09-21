@@ -620,6 +620,7 @@ export function createControlPlane(dev: Dev, options: { version: string }): { se
       signal: controller.signal,
       continueOnFailure: req.body.continueOnFailure !== false,
       promoteBacklog: req.body.promoteBacklog === true,
+      concurrency: typeof req.body.concurrency === "number" && Number.isFinite(req.body.concurrency) ? req.body.concurrency : undefined,
       onTaskEnd: () => {
         state.ran++;
       },

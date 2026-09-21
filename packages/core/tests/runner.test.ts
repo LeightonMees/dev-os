@@ -414,3 +414,39 @@ test("two in-place runs at once say so in their logs, because changed-file attri
     cleanup();
   }
 });
+
+test("auto-run runs independent tasks side by side under worktree isolation, and one at a time in place", async () => {
+  const { dev, cleanup } = openTestDev();
+  const repo = tempRepo();
+  try {
+    const project = dev.projects.add({ path: repo.path, name: "parallel" });
+    mkdirSync(join(repo.path, ".dev"), { recursive: true });
+    writeFileSync(join(repo.path, ".dev", "config.json"), JSON.stringify({ git: { isolation: "worktree" } }));
+    // Each task sleeps 1.2s; three in parallel finish in well under 3.6s.
+    const make = (n: string) => dev.tasks.create({ projectId: project.id, title: n, status: "READY", command: `${nodeExe} -e "setTimeout(()=>{require('fs').writeFileSync('${n}.txt','x')},1200)"` });
+    for (const n of ["p1", "p2", "p3"]) make(n);
+    const t0 = Date.now();
+    const report = await autoRun(dev, { projectId: project.id, concurrency: 3 });
+    const elapsed = Date.now() - t0;
+    assert.equal(report.ran.length, 3);
+    assert.ok(report.ran.every((r) => r.status === "DONE"), JSON.stringify(report.ran));
+    assert.ok(elapsed < 3200, `three 1.2s tasks took ${elapsed}ms: they did not overlap`);
+    assert.equal(report.detail, null);
+    // Each ran on its own branch; the checkout has none of the files.
+    for (const n of ["p1", "p2", "p3"]) assert.ok(!existsSync(join(repo.path, `${n}.txt`)));
+    const branches = execFileSync("git", ["branch", "--list", "dev/*"], { cwd: repo.path }).toString();
+    assert.equal(branches.trim().split("\n").filter(Boolean).length, 3, branches);
+
+    // In place, asking for parallelism is honoured as "one at a time" and the report says why.
+    writeFileSync(join(repo.path, ".dev", "config.json"), JSON.stringify({ git: { isolation: "in-place" } }));
+    for (const n of ["s1", "s2"]) make(n);
+    const t1 = Date.now();
+    const serial = await autoRun(dev, { projectId: project.id, concurrency: 2 });
+    assert.equal(serial.ran.length, 2);
+    assert.ok(Date.now() - t1 >= 2300, "two 1.2s tasks ran one after the other");
+    assert.match(serial.detail ?? "", /needs git\.isolation=worktree/);
+  } finally {
+    repo.cleanup();
+    cleanup();
+  }
+});

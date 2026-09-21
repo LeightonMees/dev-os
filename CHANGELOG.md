@@ -7,6 +7,9 @@ All notable changes to DEV are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Parallel auto-runs** (`workers.concurrency`, or `dev auto --parallel n`). Independent tasks run side
+  by side — only where `git.isolation` is `worktree`, so no two workers ever share a checkout. In place
+  the run stays one at a time and says why.
 - **Repeat arrows in flows.** An arrow marked *repeat* may point back at an earlier step; following
   it re-runs that step and everything after it, up to a limit (default 10), after which the run
   carries on past it. Ordinary arrows must still form a DAG, and the editor says which arrow closes a

@@ -148,7 +148,7 @@ export async function autoCommand(ctx: CliContext): Promise<number> {
   if (cp) {
     const client = new ControlPlaneClient(cp.url);
     if (!ctx.json) eprintln(c.dim(`▶ ${promoteBacklog ? "autopilot" : "auto-run"} ${project.name}: ${runnable.length} runnable now  via control plane`));
-    await client.call("POST", `/api/projects/${project.id}/auto`, { maxTasks, workerId, continueOnFailure: !flagBool(ctx.flags, "stop-on-failure"), promoteBacklog });
+    await client.call("POST", `/api/projects/${project.id}/auto`, { maxTasks, workerId, continueOnFailure: !flagBool(ctx.flags, "stop-on-failure"), promoteBacklog, concurrency: flagNumber(ctx.flags, "parallel") });
     if (flagBool(ctx.flags, "detach")) {
       println(ctx.json ? JSON.stringify({ started: true }) : `${c.green("✓")} auto-run started in the control plane (dev status shows progress)`);
       return 0;
@@ -173,11 +173,13 @@ export async function autoCommand(ctx: CliContext): Promise<number> {
       signal: controller.signal,
       continueOnFailure: !flagBool(ctx.flags, "stop-on-failure"),
       promoteBacklog,
+      concurrency: flagNumber(ctx.flags, "parallel"),
       onTaskStart: (t) => (ctx.json ? undefined : eprintln(`\n${c.cyan("▶")} ${t.id} ${t.title}`)),
     });
     if (ctx.json) printJson(report);
     else {
       println("");
+      if (report.detail) println(c.dim(`  ${report.detail}`));
       for (const r of report.ran) println(`  ${r.status === "DONE" ? c.green("✓") : r.status === "BLOCKED" ? c.red("✗") : c.yellow("◆")} ${r.taskId} ${statusColor(r.status as Task["status"])} ${truncate(r.title, 50)}`);
       println(c.dim(`  stopped: ${report.stoppedBecause}`));
     }
@@ -246,6 +248,7 @@ ${c.cyan("▶")} ${c.bold(project.name)}: ${runnable} runnable now`);
         signal: controller.signal,
         continueOnFailure: !flagBool(ctx.flags, "stop-on-failure"),
         promoteBacklog,
+        concurrency: flagNumber(ctx.flags, "parallel"),
         onTaskStart: (t) => (ctx.json ? undefined : eprintln(`  ${c.cyan("▶")} ${t.id} ${t.title}`)),
       });
       results.push({ projectId: project.id, name: project.name, ran: report.ran.length, blocked: report.ran.filter((r) => r.status === "BLOCKED").length, stoppedBecause: report.stoppedBecause });
