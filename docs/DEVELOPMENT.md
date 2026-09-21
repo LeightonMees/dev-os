@@ -65,3 +65,17 @@ that supplied each key, the refusals and the validation errors.
 ## Where state lives
 
 `.dev-home/` (gitignored): `config.json`, `dev.sqlite`, `logs/<execution>.log|.diff|.summary.md|.verify-N.log`, `control-plane.json` (lock file of the running control plane).
+
+## Releasing
+
+The public repository is a scrubbed copy of this one, never this tree itself.
+
+```
+node scripts/prepare-release.mjs --out ../DEV-public -m "release: x.y.z"   # commits on top of the public history
+cd ../DEV-public && git push && git tag -a vx.y.z -m "DEV x.y.z" && git push origin vx.y.z
+```
+
+The script leaves private paths behind (`docs/ecosystem`, agent instruction files, local state) and
+refuses to finish if anything secret-shaped or machine-specific is found in the copy. Bump the version
+in the root and workspace `package.json` files, `tauri.conf.json` and `src-tauri/Cargo.toml` together,
+and move the CHANGELOG's Unreleased section under the new version first.

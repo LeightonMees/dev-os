@@ -18,6 +18,8 @@ All notable changes to DEV are recorded here. The format follows
   commands, gated pushes/commits), so a new user decides how much to trust autopilot before using it.
 
 ### Fixed
+- `dev flow --help`, `dev artifacts --help` and `dev approvals --help` show their own usage instead
+  of the general help; plural and singular spellings both work.
 - A project without a directory shows "no repository yet" in the Git view instead of an empty status
   table, and the Editor no longer requests its files.
 

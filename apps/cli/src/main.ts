@@ -62,6 +62,25 @@ ${c.dim("FLAGS")}
 `;
 
 const SUB_HELP: Record<string, string> = {
+  flow: `dev flow <command>
+
+  list                             flows in the current project
+  show <id|name>                   steps, arrows, problems and recent runs
+  run <id|name> [--quiet]          run it now, printing each step as it finishes (exit 2 if it fails)
+  runs <id|name>                   run history
+  export <id|name>                 the flow as JSON with no ids, fit for a repository
+  import <file.json> [--name n]    a flow from JSON into the current project
+
+Flows are drawn in the app: commands, prompts, conditions, "Ask me" steps and repeat arrows.`,
+  artifacts: `dev artifacts [<taskId>] [--kind diff|log|report|test-result|file] [--limit n] [--json]
+
+  Every file runs produced in the current project, newest first.
+  dev artifacts show <id>          path, size, task, execution and version`,
+  approvals: `dev approvals [--all]
+
+  Pending approvals: questions from flows, gated commits, pushes and commands.
+  dev approvals approve <id> [note or answer]    the words after the id travel with the decision
+  dev approvals deny <id> [reason]`,
   task: `dev task <command>
 
   list [--status a,b] [--all]      tasks in the current project
@@ -102,6 +121,11 @@ const SUB_HELP: Record<string, string> = {
   order. Each task receives the result summaries of its upstream tasks in its context.
   --promote-backlog (alias --autopilot) also pulls Backlog tasks whose dependencies are done.`,
 };
+// Plural and singular spellings both reach the same help.
+for (const [alias, canonical] of [["flows", "flow"], ["artifact", "artifacts"], ["tasks", "task"], ["projects", "project"], ["approval", "approvals"]] as const) {
+  if (SUB_HELP[canonical] && !SUB_HELP[alias]) SUB_HELP[alias] = SUB_HELP[canonical];
+}
+
 
 export async function main(argv: string[]): Promise<number> {
   const parsed = parseArgs(argv);
