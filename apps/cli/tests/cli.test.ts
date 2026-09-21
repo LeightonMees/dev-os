@@ -189,3 +189,24 @@ test("a flow exports to portable JSON and imports back into another project", ()
     for (const dir of [home, repo, other]) rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("a pending question can be answered from the CLI, and the answer travels with the decision", () => {
+  const home = tempRoot();
+  try {
+    const project = JSON.parse(dev(home, ["project", "add", "--name", "asks", "--json"]).out) as { id: string };
+    const id = execFileSync(process.execPath, [resolve("apps/cli/tests/seed-approval.mjs"), home, project.id, "Which colour?"], { encoding: "utf8" }).trim();
+    assert.match(dev(home, ["approvals"]).out, /Which colour\?/);
+
+    const resolved = JSON.parse(dev(home, ["approvals", "approve", id, "teal,", "please", "--json"]).out) as { status: string; note: string | null };
+    assert.equal(resolved.status, "approved");
+    assert.equal(resolved.note, "teal, please", "the words after the id are the answer");
+    assert.match(dev(home, ["approvals"]).out, /No pending approvals/);
+
+    const second = execFileSync(process.execPath, [resolve("apps/cli/tests/seed-approval.mjs"), home, project.id, "Ship?"], { encoding: "utf8" }).trim();
+    const denied = JSON.parse(dev(home, ["approvals", "deny", second, "--json"]).out) as { status: string; note: string | null };
+    assert.equal(denied.status, "denied");
+    assert.equal(denied.note, null, "no words, no note");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});

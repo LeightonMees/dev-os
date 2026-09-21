@@ -49,7 +49,7 @@ ${c.dim("STATE")}
   dev flow list|show|run|runs <id|name>   flows drawn in the app, run headless from here
   dev git status|diff|log|branch [name]|commit "<msg>" [--task <id>]
   dev decision list | add "<title>" --reason .. --tags a,b
-  dev approvals [approve|deny <id>]
+  dev approvals [approve|deny <id> [note]]
 
 ${c.dim("SYSTEM")}
   dev config [get key] | set <key> <value> | path | init

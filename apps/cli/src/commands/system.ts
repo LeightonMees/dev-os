@@ -378,10 +378,14 @@ export function decisionCommand(ctx: CliContext, sub: string | undefined, rest: 
 export function approvalsCommand(ctx: CliContext, sub: string | undefined, rest: string[]): number {
   if (sub === "approve" || sub === "deny") {
     const id = rest[0];
-    if (!id) throw new UsageError(`Usage: dev approvals ${sub} <id>`);
-    const resolved = ctx.dev.approvals.resolve(id, sub === "approve" ? "approved" : "denied");
+    if (!id) throw new UsageError(`Usage: dev approvals ${sub} <id> [note or answer]`);
+    // Anything after the id is the answer. A question from a flow's "Ask me"
+    // step, or a commit awaiting approval, is answered here the same as in the
+    // app: the words travel with the decision.
+    const note = rest.slice(1).join(" ").trim() || null;
+    const resolved = ctx.dev.approvals.resolve(id, sub === "approve" ? "approved" : "denied", "user", note);
     if (ctx.json) printJson(resolved);
-    else println(`${c.green("✓")} ${id} ${resolved.status}`);
+    else println(`${c.green("✓")} ${id} ${resolved.status}${note ? c.dim(`  “${truncate(note, 60)}”`) : ""}`);
     return 0;
   }
   const list = ctx.dev.approvals.list({ status: flagBool(ctx.flags, "all") ? undefined : "pending" });
