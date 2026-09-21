@@ -213,6 +213,23 @@ export function createControlPlane(dev: Dev, options: { version: string }): { se
     dev.events.emit("GIT_COMMIT", { projectId: p.id, taskId, data: { hash: commit.hash, subject: commit.subject } });
     return commit;
   });
+  add("POST", "/api/projects/:id/git/push", async (req) => {
+    const p = repoProject(req.params.id as string);
+    // A push leaves the machine. By default it waits for the person, the same
+    // way a gated commit does: file it, and approving it performs it.
+    const gate = resolveConfigFor({ home: dev.home, projectDir: p.path }).config.approvals.requireForPush;
+    if (gate) {
+      const status = await git.status(p.path);
+      // The remote's URL is not a name; and with no upstream yet git cannot count.
+      const count = status.ahead > 0 ? `${status.ahead} commit${status.ahead === 1 ? "" : "s"}` : "sets the upstream";
+      const approval = dev.approvals.request({ projectId: p.id, action: "git.push", reason: `Push ${status.branch ?? "HEAD"} to origin (${count})` });
+      req.res.statusCode = 202;
+      return { approvalRequired: true, approval };
+    }
+    const pushed = await git.push(p.path);
+    dev.events.emit("GIT_PUSH", { projectId: p.id, data: { branch: pushed.branch, remote: pushed.remote } });
+    return pushed;
+  });
   add("GET", "/api/projects/:id/decisions", (req) => dev.decisions.list(project(req.params.id as string).id));
   add("POST", "/api/projects/:id/decisions", (req) => {
     const p = project(req.params.id as string);
@@ -763,6 +780,12 @@ export function createControlPlane(dev: Dev, options: { version: string }): { se
       const commit = await git.commit(p.path, pending.reason, { all: true });
       dev.events.emit("GIT_COMMIT", { projectId: p.id, taskId: pending.taskId, data: { hash: commit.hash, subject: commit.subject, approvalId: pending.id } });
       return { ...resolved, performed: { commit } };
+    }
+    if (status === "approved" && pending.action === "git.push" && pending.projectId) {
+      const p = repoProject(pending.projectId);
+      const pushed = await git.push(p.path);
+      dev.events.emit("GIT_PUSH", { projectId: p.id, data: { branch: pushed.branch, remote: pushed.remote, approvalId: pending.id } });
+      return { ...resolved, performed: { push: pushed } };
     }
     return resolved;
   });

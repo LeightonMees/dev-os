@@ -296,6 +296,10 @@ export class Api {
   gitCommit(id: string, message: string, taskId?: string) {
     return this.request<{ hash: string; short: string; subject: string } | { approvalRequired: true; approval: Approval }>("POST", `/api/projects/${id}/git/commit`, { message, taskId });
   }
+  /** Either the push result, or the approval filed instead when the project requires one. */
+  gitPush(id: string) {
+    return this.request<{ branch: string; remote: string; output: string } | { approvalRequired: true; approval: Approval }>("POST", `/api/projects/${id}/git/push`, {});
+  }
   decisions(projectId: string) {
     return this.request<Decision[]>("GET", `/api/projects/${projectId}/decisions`);
   }

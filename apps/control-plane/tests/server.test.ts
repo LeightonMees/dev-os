@@ -373,3 +373,46 @@ test("a project that requires approval files the commit as an approval, and appr
     rmSync(repo, { recursive: true, force: true });
   }
 });
+
+test("a push is filed for approval by default, approving it performs the push, and a project can turn the gate off", async () => {
+  const home = tempRoot();
+  const repo = tempRoot();
+  const remote = tempRoot();
+  execFileSync("git", ["init", "-q", "--bare", "-b", "main"], { cwd: remote });
+  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: repo });
+  execFileSync("git", ["config", "user.email", "t@example.invalid"], { cwd: repo });
+  execFileSync("git", ["config", "user.name", "t"], { cwd: repo });
+  execFileSync("git", ["remote", "add", "origin", remote], { cwd: repo });
+  writeFileSync(join(repo, "README.md"), "# t");
+  execFileSync("git", ["add", "-A"], { cwd: repo });
+  execFileSync("git", ["commit", "-q", "-m", "init"], { cwd: repo });
+  const cp = await start({ home, port: 0 });
+  try {
+    const project = await api<{ id: string }>(cp.url, "POST", "/api/projects", { path: repo, name: "pushy" });
+
+    // Default: pushing leaves the machine, so it waits for the person.
+    const response = await fetch(`${cp.url}/api/projects/${project.id}/git/push`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    assert.equal(response.status, 202);
+    const filed = (await response.json()) as { approvalRequired: boolean; approval: { id: string; action: string; reason: string } };
+    assert.equal(filed.approval.action, "git.push");
+    assert.match(filed.approval.reason, /Push main to origin \(sets the upstream\)/);
+    assert.throws(() => execFileSync("git", ["rev-parse", "--verify", "main"], { cwd: remote, stdio: "pipe" }), "nothing has reached the remote yet");
+
+    const resolved = await api<{ status: string; performed?: { push: { branch: string; remote: string } } }>(cp.url, "POST", `/api/approvals/${filed.approval.id}/resolve`, { status: "approved" });
+    assert.equal(resolved.performed?.push.branch, "main");
+    assert.equal(execFileSync("git", ["rev-parse", "main"], { cwd: remote }).toString().trim(), execFileSync("git", ["rev-parse", "main"], { cwd: repo }).toString().trim(), "the remote now has the commit");
+
+    // Only the global settings may waive the gate (a project can demand it, never drop it);
+    // then the push happens directly.
+    writeFileSync(join(home, "config.json"), JSON.stringify({ approvals: { requireForPush: false } }));
+    writeFileSync(join(repo, "more.md"), "more");
+    execFileSync("git", ["add", "-A"], { cwd: repo });
+    execFileSync("git", ["commit", "-q", "-m", "more"], { cwd: repo });
+    const direct = await api<{ branch: string; remote: string }>(cp.url, "POST", `/api/projects/${project.id}/git/push`, {});
+    assert.equal(direct.remote, "origin");
+    assert.equal(execFileSync("git", ["log", "--oneline", "main"], { cwd: remote }).toString().trim().split("\n").length, 2);
+  } finally {
+    await cp.close();
+    for (const dir of [home, repo, remote]) rmSync(dir, { recursive: true, force: true });
+  }
+});

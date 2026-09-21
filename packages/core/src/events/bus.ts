@@ -34,6 +34,8 @@ export const EVENT_TYPES = [
   "PLAN_PROPOSED",
   "PLAN_APPLIED",
   "GIT_COMMIT",
+  /** The current branch was pushed to its remote. */
+  "GIT_PUSH",
   /** A run was given its own git worktree and branch instead of the user's checkout. */
   "WORKTREE_CREATED",
   /** The run's changes were committed on its branch; the worktree itself is gone. */

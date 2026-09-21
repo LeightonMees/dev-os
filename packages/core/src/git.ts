@@ -177,6 +177,20 @@ export async function commit(cwd: string, message: string, options: { all?: bool
   return head;
 }
 
+/**
+ * Push the current branch. A branch with no upstream is pushed to `origin` and
+ * set to track it, which is what a person means the first time they push.
+ */
+export async function push(cwd: string): Promise<{ branch: string; remote: string; output: string }> {
+  const branch = (await git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"])).trim();
+  if (branch === "HEAD") throw new Error("HEAD is detached; check out a branch before pushing");
+  const upstream = await tryGit(cwd, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
+  const remote = upstream ? upstream.trim().split("/")[0]! : "origin";
+  const args = upstream ? ["push"] : ["push", "-u", remote, branch];
+  const output = await git(cwd, args, { timeoutMs: 120_000 });
+  return { branch, remote, output: output.trim() };
+}
+
 export async function worktreeAdd(cwd: string, path: string, branch: string): Promise<void> {
   await git(cwd, ["worktree", "add", "-b", branch, path]);
 }

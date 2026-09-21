@@ -495,6 +495,16 @@ export const CONFIG_SCHEMA = {
       active: true,
       restricted: "approvals.requireForCommit may only be turned on by a project, session or task",
     }),
+    requireForPush: field<boolean>({
+      label: "Require approval for pushes",
+      type: "boolean",
+      // On by default: a push leaves the machine, and nothing DEV does should
+      // reach a remote without a person saying so.
+      default: true,
+      description: "Push files an approval instead of pushing; approving it performs the push.",
+      active: true,
+      restricted: "approvals.requireForPush may only be turned on by a project, session or task",
+    }),
     defaultPolicy: field<(typeof APPROVAL_POLICIES)[number]>({
       label: "Default policy",
       type: "enum",

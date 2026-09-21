@@ -187,6 +187,8 @@ const RESTRICTED: Record<string, (current: unknown, next: unknown) => boolean> =
   "secrets.files": (current, next) =>
     Array.isArray(next) && Array.isArray(current) && next.every((file) => current.includes(file)),
   "approvals.requireForCommit": (current, next) => next === true || next === current,
+  // Same shape: a project, session or task may demand approval for pushes, never waive it.
+  "approvals.requireForPush": (current, next) => next === true || next === current,
   "workers.timeoutMs": (current, next) => typeof next === "number" && typeof current === "number" && next <= current,
   "workers.agentTimeoutMs": (current, next) => typeof next === "number" && typeof current === "number" && next <= current,
   "chat.maxToolCalls": (current, next) => typeof next === "number" && typeof current === "number" && next <= current,

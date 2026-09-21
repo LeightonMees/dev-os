@@ -87,6 +87,22 @@ export function GitView() {
             {(status.ahead || status.behind) ? <span className="dim"> ↑{status.ahead} ↓{status.behind}</span> : null}
           </span>
         )}
+        {status?.remote && (
+          <button
+            className="btn small"
+            disabled={!status.ahead}
+            title={status.ahead ? `Push ${status.ahead} commit(s) to ${status.remote}` : "Nothing to push: the remote has every local commit"}
+            onClick={async () => {
+              const result = await act(() => api.gitPush(currentProject.id));
+              if (!result) return;
+              if ("approvalRequired" in result) toast("info", "Push filed for your approval — approve it in Attention to push");
+              else toast("success", `Pushed ${result.branch} to ${result.remote}`);
+              await load();
+            }}
+          >
+            Push{status.ahead ? ` ↑${status.ahead}` : ""}
+          </button>
+        )}
         <span className="spacer" />
         <select
           className="select auto"

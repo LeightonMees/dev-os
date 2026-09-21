@@ -345,6 +345,15 @@ export async function gitCommand(ctx: CliContext, sub: string | undefined, rest:
       else println(`${c.green("✓")} ${commit.short} ${commit.subject}`);
       return 0;
     }
+    case "push": {
+      // Typed by the person at a terminal: that is the approval. The gate applies
+      // to pushes DEV would otherwise make on its own through the app or a run.
+      const pushed = await git.push(project.path);
+      ctx.dev.events.emit("GIT_PUSH", { projectId: project.id, data: { branch: pushed.branch, remote: pushed.remote } });
+      if (ctx.json) printJson(pushed);
+      else println(`${c.green("✓")} pushed ${pushed.branch} to ${pushed.remote}${pushed.output ? c.dim(`\n${pushed.output}`) : ""}`);
+      return 0;
+    }
     default:
       throw new UsageError(`Unknown git command "${sub}". Try: dev git status|diff|log|branch|commit`);
   }

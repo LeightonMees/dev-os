@@ -13,6 +13,10 @@ All notable changes to DEV are recorded here. The format follows
   directories fall back to running in place and say so in the log.
 - `dev artifacts` lists every file runs produced, filterable by task and kind; `dev artifacts show <id>`
   gives the path and details.
+- **Push, gated by default** (`approvals.requireForPush`, on unless the global settings turn it off; a project can demand it, never waive it). Push in the
+  Git view or from a run files an approval; approving it performs the push. `dev git push` at a
+  terminal is the person acting and pushes directly. A branch with no upstream is pushed to `origin`
+  and set to track it.
 - **Approval gate on commits** (`approvals.requireForCommit`). Commit in the Git view files an approval
   instead of committing; approving it performs the commit with that message, denying it drops it.
   Nothing is half-done in between.
