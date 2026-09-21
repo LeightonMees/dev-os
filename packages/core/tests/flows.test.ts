@@ -219,3 +219,56 @@ test("templates substitute earlier output and refuse to half-substitute", () => 
   assert.throws(() => interpolate("echo {{missing.output}}", steps), /No earlier step called "missing"/);
   assert.deepEqual(referencedSteps("{{a.output}} and {{b.status}} and {{a.exitCode}}"), ["a", "b"]);
 });
+
+test("a human step waits for the person's answer, hands the answer on, and a decline stops the run", async () => {
+  const { dev, cleanup } = openTestDev();
+  const repo = tempRepo();
+  try {
+    const project = dev.projects.add({ path: repo.path, name: "ask" });
+    const flow = dev.flows.create({
+      projectId: project.id,
+      name: "ask then act",
+      nodes: [
+        { id: "q", kind: "human", label: "ship", x: 0, y: 0, prompt: "Ship it? Reply with the release note." },
+        { id: "w", kind: "shell", label: "write", x: 200, y: 0, command: `${nodeExe} -e "require('fs').writeFileSync('note.txt', process.argv[1])" "{{ship.output}}"` },
+      ],
+      edges: [edge("q", "w")],
+    });
+
+    // Nobody has answered yet: the run must be waiting, with the question filed where the person looks.
+    const running = runFlow(dev, { flowId: flow.id });
+    await new Promise((r) => setTimeout(r, 700));
+    const pending = dev.approvals.list({ status: "pending" });
+    assert.equal(pending.length, 1, "exactly one question is waiting");
+    assert.equal(pending[0]!.action, "human-input");
+    assert.equal(pending[0]!.reason, "Ship it? Reply with the release note.");
+    assert.equal(dev.flows.runs(flow.id)[0]?.status, "RUNNING", "the run is paused, not failed");
+
+    dev.approvals.resolve(pending[0]!.id, "approved", "user", "v1.2: faster sync");
+    const report = await running;
+    assert.equal(report.status, "PASSED", report.detail ?? "");
+    assert.equal(report.steps[0]?.output, "v1.2: faster sync", "the answer is the step's output");
+    assert.equal(readFileSync(join(repo.path, "note.txt"), "utf8"), "v1.2: faster sync", "the next step received the answer");
+
+    // Declining stops the run and says so; nothing downstream runs.
+    const second = runFlow(dev, { flowId: flow.id });
+    await new Promise((r) => setTimeout(r, 700));
+    const again = dev.approvals.list({ status: "pending" });
+    dev.approvals.resolve(again[0]!.id, "denied", "user", "not yet");
+    const declined = await second;
+    assert.equal(declined.status, "FAILED");
+    assert.match(declined.detail ?? "", /declined: not yet/);
+    assert.equal(declined.steps.length, 1, "the write step never ran");
+
+    // A cancelled run stops waiting instead of leaving a question that no run will ever read.
+    const controller = new AbortController();
+    const third = runFlow(dev, { flowId: flow.id, signal: controller.signal });
+    await new Promise((r) => setTimeout(r, 700));
+    controller.abort();
+    const cancelled = await third;
+    assert.equal(cancelled.status, "CANCELLED");
+  } finally {
+    cleanup();
+    repo.cleanup();
+  }
+});

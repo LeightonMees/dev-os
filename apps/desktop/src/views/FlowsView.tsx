@@ -12,6 +12,7 @@ const KINDS: { id: FlowNode["kind"]; label: string; blurb: string }[] = [
   { id: "shell", label: "Command", blurb: "Run a command in the project directory." },
   { id: "prompt", label: "Prompt", blurb: "Give an agent worker a brief. Routed like a task." },
   { id: "condition", label: "Condition", blurb: "Branch on what an earlier step produced." },
+  { id: "human", label: "Ask me", blurb: "Pause and ask you a question in Attention. Your answer is this step's output." },
 ];
 
 function newId(prefix: string): string {
@@ -408,6 +409,16 @@ function NodeEditor({
           <span>Command</span>
           <textarea className="input mono" rows={3} value={node.command ?? ""} placeholder="npm test" onChange={(e) => onChange({ command: e.target.value })} />
         </label>
+      )}
+
+      {node.kind === "human" && (
+        <>
+          <label className="field">
+            <span>Question</span>
+            <textarea className="input" rows={4} value={node.prompt ?? ""} placeholder="The tests passed — ship it? Answer with the release note to use." onChange={(e) => onChange({ prompt: e.target.value })} />
+          </label>
+          <div className="dim small">The run pauses here and the question appears in Attention. Approve with a note to continue — the note becomes {`{{${node.label || "this step"}.output}}`}. Decline to stop the run.</div>
+        </>
       )}
 
       {node.kind === "prompt" && (

@@ -2295,3 +2295,6 @@ ul.bullets.editable {
   width: 100% !important;
   height: 100% !important;
 }
+
+/* An "Ask me" step is where a run stops for a person: mark it as such. */
+.flow-node.human { border-left: 3px solid var(--warn); }

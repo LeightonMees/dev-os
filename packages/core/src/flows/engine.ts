@@ -168,6 +168,35 @@ async function runNode(
   const { node, run, project, results, options } = ctx;
   const steps = [...results.values()];
 
+  // A human step files the question in Attention and waits. The answer is the
+  // step's output, so later steps can build on what the person said; a decline
+  // fails the step, because a run that carried on past "no" would be lying.
+  if (node.kind === "human") {
+    const record = dev.flows.startNode(run.id, node.id, null);
+    let question: string;
+    try {
+      question = interpolate(node.prompt ?? "", steps);
+    } catch (error) {
+      const message = (error as Error).message;
+      dev.flows.finishNode(record.id, "FAILED", "", message);
+      return { status: "FAILED", output: "", detail: message, exitCode: null };
+    }
+    const approval = dev.approvals.request({ projectId: project.id, action: "human-input", reason: question });
+    const answered = await waitForAnswer(dev, approval.id, options.signal);
+    if (answered === null) {
+      dev.flows.finishNode(record.id, "CANCELLED", "", "cancelled while waiting for an answer");
+      return { status: "CANCELLED", output: "", detail: "cancelled while waiting for an answer", exitCode: null };
+    }
+    if (answered.status === "denied") {
+      const detail = answered.note ? `declined: ${answered.note}` : "declined";
+      dev.flows.finishNode(record.id, "FAILED", answered.note ?? "", detail);
+      return { status: "FAILED", output: answered.note ?? "", detail, exitCode: null };
+    }
+    const answer = answered.note ?? "approved";
+    dev.flows.finishNode(record.id, "PASSED", answer, null);
+    return { status: "PASSED", output: answer, detail: null, exitCode: null };
+  }
+
   // A condition does no work outside DEV, so it is evaluated here rather than handed to a worker.
   if (node.kind === "condition") {
     const record = dev.flows.startNode(run.id, node.id, null);
@@ -247,4 +276,19 @@ async function runNode(
         : `exit ${result.exitCode}: ${result.summary || "no output"}`;
   dev.flows.finishNode(record.id, status, summary, detail, worker.id);
   return { status, output: summary, detail, exitCode: result.exitCode };
+}
+
+/**
+ * Poll the approval until a person resolves it, or the run is cancelled. Half a
+ * second is quick enough that an answer in the app feels immediate and slow
+ * enough that a run waiting overnight costs nothing.
+ */
+async function waitForAnswer(dev: Dev, approvalId: string, signal?: AbortSignal): Promise<{ status: "approved" | "denied"; note: string | null } | null> {
+  for (;;) {
+    if (signal?.aborted) return null;
+    const current = dev.approvals.get(approvalId);
+    if (!current) return null;
+    if (current.status === "approved" || current.status === "denied") return { status: current.status, note: current.note };
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
 }

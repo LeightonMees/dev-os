@@ -6,15 +6,17 @@
 // stored and run separately, because a flow has no acceptance criteria of its own and must not
 // pretend to.
 //
-// Three node kinds in this version, each of which does real work:
+// Four node kinds in this version, each of which does real work:
 //   * `shell`     — a command, run by the shell worker in the project directory
 //   * `prompt`    — a brief for an agent worker, routed the same way a task is
 //   * `condition` — a branch on what earlier steps produced
+//   * `human`     — a question for the person; the run waits in Attention until they answer, and
+//                   the answer is this step's output for later steps to use
 //
-// Human-input and loop nodes are the next kinds; they are deliberately absent rather than present
-// and inert, so nothing in the editor is a control that cannot work.
+// Loop nodes are the next kind; they are deliberately absent rather than present and inert, so
+// nothing in the editor is a control that cannot work.
 
-export const FLOW_NODE_KINDS = ["shell", "prompt", "condition"] as const;
+export const FLOW_NODE_KINDS = ["shell", "prompt", "condition", "human"] as const;
 export type FlowNodeKind = (typeof FLOW_NODE_KINDS)[number];
 
 export const FLOW_RUN_STATUSES = ["RUNNING", "PASSED", "FAILED", "CANCELLED"] as const;
@@ -128,6 +130,7 @@ export function validateFlow(flow: Pick<Flow, "nodes" | "edges">): FlowProblem[]
   for (const node of flow.nodes) {
     if (node.kind === "shell" && !node.command?.trim()) problems.push({ nodeId: node.id, edgeId: null, message: `"${node.label}" is a command step with no command.` });
     if (node.kind === "prompt" && !node.prompt?.trim()) problems.push({ nodeId: node.id, edgeId: null, message: `"${node.label}" is a prompt step with no prompt.` });
+    if (node.kind === "human" && !node.prompt?.trim()) problems.push({ nodeId: node.id, edgeId: null, message: `"${node.label}" asks the person nothing: give it a question.` });
     if (node.kind === "condition") {
       if (!node.expression?.trim()) problems.push({ nodeId: node.id, edgeId: null, message: `"${node.label}" is a condition with no test.` });
       const out = flow.edges.filter((e) => e.from === node.id);

@@ -19,6 +19,8 @@ All notable changes to DEV are recorded here. The format follows
 - **Routing learns from this machine.** With no preference stated, a worker that has finished
   its runs here is tried before one a public benchmark merely recommends: success rate first, then
   speed, after at least three finished runs. The routing reason says so in plain words.
+- **Human steps in flows.** A `human` node asks the person a question; the run waits in Attention
+  until they answer, and the answer is the step's output for later steps. Declining fails the step.
 - **A 3D viewport for GLB/GLTF artifacts**: orbit, zoom and pan, framed to the model's bounds, with mesh
   and triangle counts read from the loaded scene. Where WebGL is missing it says so instead of showing
   a black box.
