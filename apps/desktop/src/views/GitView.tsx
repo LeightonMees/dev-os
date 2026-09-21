@@ -76,6 +76,25 @@ export function GitView() {
   };
   const untrackedSelected = path && status?.changes.find((c) => c.path === path)?.status === "??";
 
+  if (!currentProject.path) {
+    // A planning-only project has nothing to show here; an empty status table
+    // would read as "a repository with no changes", which is not what this is.
+    return (
+      <div className="view">
+        <div className="toolbar">
+          <h1>Git</h1>
+        </div>
+        <div className="view-body">
+          <div className="empty">
+            <b>{currentProject.name} has no repository yet.</b>
+            <br />
+            Give it a directory (Edit project) and its git state appears here.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="view">
       <div className="toolbar">

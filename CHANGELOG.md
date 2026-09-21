@@ -6,6 +6,10 @@ All notable changes to DEV are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- A project without a directory shows "no repository yet" in the Git view instead of an empty status
+  table, and the Editor no longer requests its files.
+
 ## [0.2.0] - 2026-09-21
 
 One day after 0.1.0, driven by running DEV the way a stranger would and fixing what that surfaced,

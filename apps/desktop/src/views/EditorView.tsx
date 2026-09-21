@@ -32,7 +32,9 @@ export function EditorView() {
 
   const loadDir = useCallback(
     async (path: string) => {
-      if (!projectId) return;
+      // A project without a directory has no files to list; asking would only
+      // produce a 409 the view already explains.
+      if (!projectId || !currentProject?.path) return;
       try {
         const result = await api.files(projectId, path);
         setTree((t) => new Map(t).set(path, result.entries));
@@ -41,7 +43,7 @@ export function EditorView() {
         setTreeError((error as Error).message);
       }
     },
-    [api, projectId],
+    [api, projectId, currentProject?.path],
   );
 
   // Reset everything when the project changes: another project's files must never linger.
