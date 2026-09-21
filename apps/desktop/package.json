@@ -1,6 +1,6 @@
 {
   "name": "@dev/desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "DEV desktop app: Tauri 2 + React. Talks to the control plane; hosts the integrated PTY terminal.",

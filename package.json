@@ -1,6 +1,6 @@
 {
   "name": "dev",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "DEV: a local development operating system. One core, a CLI and a desktop app.",

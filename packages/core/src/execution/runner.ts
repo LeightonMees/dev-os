@@ -106,6 +106,15 @@ export async function runTask(dev: Dev, taskId: string, options: RunOptions = {}
   const isolation = resolveConfigFor({ home: dev.home, projectDir: projectPath }).config.git.isolation;
   let runCwd = projectPath;
   let worktree: { path: string; branch: string } | null = null;
+  // Two in-place runs in one checkout cannot tell whose edit is whose: changed
+  // files are read from the tree, so each would claim the other's. Say so in the
+  // log rather than let the attribution look precise.
+  const concurrent = dev.executions.list({ projectId: project.id, status: "running" }).filter((e) => e.id !== execution.id);
+  if (isolation !== "worktree" && concurrent.length > 0) {
+    appendFileSync(logPath, `# note: ${concurrent.length} other run(s) active in this checkout (${concurrent.map((e) => e.id).join(", ")}); changed files below may include theirs. Set git.isolation=worktree to keep runs apart.
+
+`);
+  }
   if (isolation === "worktree") {
     if (await gitOps.isRepo(projectPath)) {
       const branch = `dev/${task.id}`;

@@ -395,3 +395,22 @@ test("a gated command waits for approval: denied blocks the task with the reason
     cleanup();
   }
 });
+
+test("two in-place runs at once say so in their logs, because changed-file attribution cannot be trusted then", async () => {
+  const { dev, cleanup } = openTestDev();
+  const repo = tempRepo();
+  try {
+    const project = dev.projects.add({ path: repo.path, name: "busy" });
+    const slow = (n: string) => dev.tasks.create({ projectId: project.id, title: n, command: `${nodeExe} -e "setTimeout(()=>{require('fs').writeFileSync('${n}.txt','x')},1200)"`, status: "READY" });
+    const a = slow("a");
+    const b = slow("b");
+    const [ra, rb] = await Promise.all([runTask(dev, a.id), runTask(dev, b.id)]);
+    assert.equal(ra.status, "succeeded");
+    assert.equal(rb.status, "succeeded");
+    const logs = [ra, rb].map((r) => readFileSync(r.logPath as string, "utf8"));
+    assert.ok(logs.some((l) => /other run\(s\) active in this checkout/.test(l)), "at least the later run was told it had company");
+  } finally {
+    repo.cleanup();
+    cleanup();
+  }
+});

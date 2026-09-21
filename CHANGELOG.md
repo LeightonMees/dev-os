@@ -6,6 +6,11 @@ All notable changes to DEV are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-21
+
+One day after 0.1.0, driven by running DEV the way a stranger would and fixing what that surfaced,
+plus the safety features autopilot needed before it could be trusted unattended.
+
 ### Added
 - **Worktree isolation** (`git.isolation: worktree`, per project or global). Each run gets its own git
   worktree on a branch named `dev/<task>`; what changed is committed there and the worktree removed,
@@ -51,6 +56,8 @@ All notable changes to DEV are recorded here. The format follows
 - Path placeholders in the project dialogs no longer show the maintainer's drive.
 - `dev project new` on a fresh machine failed with "Parent directory does not exist" because the
   default project directory had never been created. It is created now; OneDrive is still refused.
+- Two in-place runs in one checkout now say so in their logs: changed files are read from the tree,
+  so each would otherwise claim the other's edits as its own.
 - `runnable()` no longer stops at the first 500 READY tasks; a large queue could leave work that never
   ran and never said why.
 
@@ -129,5 +136,6 @@ tested, and still moving.
 - The Markdown preview's code-fence parser never advanced its cursor and could exhaust memory on a
   fenced block.
 
-[Unreleased]: https://github.com/LeightonMees/dev-os/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/LeightonMees/dev-os/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/LeightonMees/dev-os/releases/tag/v0.2.0
 [0.1.0]: https://github.com/LeightonMees/dev-os/releases/tag/v0.1.0
