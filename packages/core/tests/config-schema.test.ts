@@ -120,7 +120,7 @@ test("settings nothing reads yet are marked inactive so the UI can say so", () =
   for (const field of CONFIG_FIELDS) {
     if (declaredOnly.has(field.section)) assert.equal(field.active, false, `${field.key} claims to be read already`);
   }
-  const live = ["workers.timeoutMs", "context.budgetTokens", "ui.theme", "privacy.mode", "nexus.enabled", "chat.worker"];
+  const live = ["workers.timeoutMs", "workers.agentTimeoutMs", "context.budgetTokens", "ui.theme", "privacy.mode", "nexus.enabled", "chat.worker"];
   for (const key of live) assert.equal(configFieldFor(key)?.active, true, `${key} should be active`);
 });
 

@@ -253,6 +253,14 @@ test("a web page cannot drive the control plane, while DEV's own window can", as
     const stream = await fetch(`${cp.url}/api/events/stream?since=0`, { headers: { origin: "https://evil.example" } });
     assert.equal(stream.status, 403);
     await stream.body?.cancel();
+
+    // Sandboxed iframes (worker HTML previews) send Origin: null. That used to skip the check.
+    const opaque = await fetch(`${cp.url}/api/projects`, {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "null" },
+      body: JSON.stringify({ path: home, name: "pwned-null" }),
+    });
+    assert.equal(opaque.status, 403);
   } finally {
     await cp.close();
     rmSync(home, { recursive: true, force: true });
@@ -278,6 +286,41 @@ test("an autopilot limit of 0 means zero, not unlimited", async () => {
     assert.equal(tasks[0]?.status, "READY", "the task must be untouched by a zero-task run");
 
     await assert.rejects(api(cp.url, "POST", `/api/projects/${project.id}/auto`, { maxTasks: "many" }), /must be a number/);
+  } finally {
+    await cp.close();
+    rmSync(home, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test("autopilot promotes a backlog task over HTTP and records AUTO_RUN events", async () => {
+  const home = tempRoot();
+  const repo = tempRoot();
+  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: repo });
+  writeFileSync(join(repo, "README.md"), "# t");
+  const cp = await start({ home, port: 0 });
+  const node = process.execPath.includes(" ") ? `"${process.execPath}"` : process.execPath;
+  try {
+    const project = await api<{ id: string }>(cp.url, "POST", "/api/projects", { path: repo, name: "promote-http" });
+    const task = await api<{ id: string }>(cp.url, "POST", "/api/tasks", {
+      projectId: project.id,
+      title: "from backlog",
+      command: `${node} -e "require('fs').writeFileSync('from-auto.txt','ok')"`,
+      status: "BACKLOG",
+    });
+    await api(cp.url, "POST", `/api/projects/${project.id}/auto`, { promoteBacklog: true, maxTasks: 1 });
+    const deadline = Date.now() + 15_000;
+    let status = "BACKLOG";
+    while (Date.now() < deadline) {
+      const live = await api<{ status: string }>(cp.url, "GET", `/api/tasks/${task.id}`);
+      status = live.status;
+      if (status === "DONE" || status === "BLOCKED") break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    assert.equal(status, "DONE");
+    const events = await api<{ type: string }[]>(cp.url, "GET", `/api/events?projectId=${project.id}&types=AUTO_RUN_STARTED,AUTO_RUN_FINISHED&limit=20`);
+    assert.ok(events.some((e) => e.type === "AUTO_RUN_STARTED"));
+    assert.ok(events.some((e) => e.type === "AUTO_RUN_FINISHED"));
   } finally {
     await cp.close();
     rmSync(home, { recursive: true, force: true });

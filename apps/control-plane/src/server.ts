@@ -589,6 +589,8 @@ export function createControlPlane(dev: Dev, options: { version: string }): { se
       onTaskEnd: () => {
         state.ran++;
       },
+    }).catch(() => {
+      // autoRun emits AUTO_RUN_FINISHED in its own finally; this only stops an unhandled rejection.
     }).finally(() => runtime.auto.delete(p.id));
     return { started: true, projectId: p.id, runnable: dev.tasks.runnable(p.id).length, promoteBacklog: state.promoteBacklog };
   });
@@ -815,7 +817,8 @@ export function createControlPlane(dev: Dev, options: { version: string }): { se
       sendJson(res, 403, { error: "Refused: the control plane only answers requests addressed to this machine." });
       return;
     }
-    if (typeof origin === "string" && origin !== "null") {
+    if (typeof origin === "string") {
+      // `Origin: null` is what sandboxed iframes (and some local files) send. It is not DEV's window.
       if (!originIsTrusted(origin)) {
         sendJson(res, 403, { error: `Refused: ${origin} is not allowed to reach the control plane.` });
         return;

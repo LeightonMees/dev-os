@@ -1,6 +1,6 @@
 {
   "name": "@dev/cli",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "The `dev` command: DEV without the desktop app.",

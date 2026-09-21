@@ -6,7 +6,16 @@ All notable changes to DEV are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-21
+
+First public release. Version numbers start at 0.1.0 to say what the software is: used daily,
+tested, and still moving.
+
 ### Added
+- **Autopilot actually promotes Backlog.** It used to toast “started” and exit if nothing was
+  already Ready, or if the first 500 Backlog tickets could not start. It now scans the whole
+  Backlog, skips tickets that need you or have unmet deps, emits `AUTO_RUN_STARTED` /
+  `AUTO_RUN_FINISHED`, and says so when there is nothing to run. CLI: `dev auto --promote-backlog`.
 - **The brief is editable.** The composer showed the assembled prompt read-only, so you could see a
   brief was wrong and had no way to correct it except by changing the inputs and hoping. A task now
   carries `promptOverride`: edit the brief, save, and that exact text is what the worker receives,
@@ -14,6 +23,10 @@ All notable changes to DEV are recorded here. The format follows
   breakdown still shows what DEV *would* have sent, so an override stays reviewable.
 
 ### Changed
+- **Coding agents get two hours, not 30 minutes.** `workers.timeoutMs` (default 30 minutes) now
+  applies to shell commands. Agents use `workers.agentTimeoutMs` (default 2 hours). A retry after a
+  timeout doubles the cap once, up to 4 hours. The board shows “exceeded 30 minutes” and the next
+  action, not `1800s`. Settings labels these in minutes.
 - **Attached files are excerpted by relevance to the task, not by position in the file.** Head
   truncation assumed the useful part of a document sits at the top. That holds for a source file and
   fails for the reference documents planners actually attach. Files are now split on markdown
@@ -53,6 +66,8 @@ All notable changes to DEV are recorded here. The format follows
   proceed if anything private or secret-shaped is found in it.
 
 ### Fixed
+- **`Origin: null` could drive the control plane.** Sandboxed iframes send that origin; the CSRF
+  check skipped it. It is now refused like any other untrusted origin.
 - **The control plane could be driven by any web page you had open.** It answered with
   `Access-Control-Allow-Origin: *` and no authentication, so a page in your browser could reach
   loopback and create or run tasks on your machine. It now refuses any request carrying a browser
@@ -65,3 +80,6 @@ All notable changes to DEV are recorded here. The format follows
   changed.
 - The Markdown preview's code-fence parser never advanced its cursor and could exhaust memory on a
   fenced block.
+
+[Unreleased]: https://github.com/LeightonMees/dev-os/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/LeightonMees/dev-os/releases/tag/v0.1.0

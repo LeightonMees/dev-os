@@ -112,6 +112,8 @@ const REFRESH_EVENTS = new Set([
   "GIT_COMMIT",
   "APPROVAL_REQUESTED",
   "APPROVAL_RESOLVED",
+  "AUTO_RUN_STARTED",
+  "AUTO_RUN_FINISHED",
 ]);
 
 /** Events that mean a person has to act. These raise a toast and an OS notification. */
@@ -121,6 +123,15 @@ function describeAttention(event: DevEvent): { title: string; text: string } | n
       return { title: "DEV needs your review", text: `A task is waiting for your review${event.data.reason ? `: ${event.data.reason}` : ""}.` };
     case "APPROVAL_REQUESTED":
       return { title: event.data.action === "human-input" ? "DEV has a question for you" : "DEV needs your approval", text: String(event.data.reason ?? event.data.action ?? "") };
+    case "AUTO_RUN_FINISHED": {
+      const ran = Number(event.data.ran ?? 0);
+      const blocked = Number(event.data.blocked ?? 0);
+      const detail = String(event.data.detail ?? "");
+      const label = event.data.promoteBacklog ? "Autopilot" : "Auto-run";
+      if (ran === 0) return { title: `${label} found nothing to run`, text: detail || "Nothing Ready, and no Backlog task that can start." };
+      if (blocked === ran) return { title: `${label} finished: every task blocked`, text: detail || "Every task in this run blocked or timed out." };
+      return null;
+    }
     case "TASK_BLOCKED": {
       const failure = event.data.failure as { kind?: string; reason?: string } | undefined;
       if (!failure) return null;

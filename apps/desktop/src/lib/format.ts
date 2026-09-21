@@ -118,6 +118,10 @@ export function describeEvent(type: string, data: Record<string, unknown>): stri
       return String(data.name ?? "");
     case "REVIEW_REQUESTED":
       return String(data.reason ?? "");
+    case "AUTO_RUN_STARTED":
+      return data.promoteBacklog ? "autopilot" : "auto-run";
+    case "AUTO_RUN_FINISHED":
+      return String(data.detail ?? `${data.ran ?? 0} task(s) · ${data.stoppedBecause ?? ""}`);
     default:
       return truncate(JSON.stringify(data), 80);
   }

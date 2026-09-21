@@ -109,7 +109,12 @@ export function Board({ tasks, selectedId, onSelect, onMove, onRefused, onRun, o
                     {task.command && <span title={task.command}>$</span>}
                     <span style={{ marginLeft: "auto" }}>{ago(task.updatedAt)}</span>
                   </div>
-                  {task.status === "BLOCKED" && task.failure && <div className="reason">{truncate(task.failure.reason, 110)}</div>}
+                  {task.status === "BLOCKED" && task.failure && (
+                    <div className="reason" title={task.failure.nextAction}>
+                      {truncate(task.failure.reason, 110)}
+                      {task.failure.nextAction ? <div className="dim small">{truncate(task.failure.nextAction, 140)}</div> : null}
+                    </div>
+                  )}
                   {task.status === "DONE" && task.resultSummary && <div className="result">{truncate(task.resultSummary, 90)}</div>}
                   <QuickActions task={task} onRun={onRun} onRetry={onRetry} onCancel={onCancel} onApprove={onApprove} />
                 </article>
@@ -135,7 +140,7 @@ function QuickActions({ task, onRun, onRetry, onCancel, onApprove }: { task: Tas
   if (task.status === "BLOCKED")
     return (
       <div className="row" style={{ marginTop: 6 }} onClick={stop}>
-        <button className="btn small" onClick={() => onRetry(task.id)}>
+        <button className="btn small" title={task.failure?.kind === "timeout" ? task.failure.nextAction : "Retry this task"} onClick={() => onRetry(task.id)}>
           Retry
         </button>
       </div>

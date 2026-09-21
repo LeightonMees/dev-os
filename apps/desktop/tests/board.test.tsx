@@ -52,6 +52,7 @@ describe("Board", () => {
     render(<Board tasks={tasks} selectedId={null} onSelect={onSelect} onMove={vi.fn()} onRun={onRun} onRetry={onRetry} onCancel={vi.fn()} onApprove={vi.fn()} />);
     for (const label of ["Backlog", "Ready", "Working", "Blocked", "Review", "Done"]) expect(screen.getByText(label)).toBeTruthy();
     expect(screen.getByText("exit 1")).toBeTruthy();
+    expect(screen.getByText("fix")).toBeTruthy();
     expect(screen.getByText("all good")).toBeTruthy();
     fireEvent.click(screen.getByText("Run"));
     expect(onRun).toHaveBeenCalledWith("a");

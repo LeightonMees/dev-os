@@ -5,10 +5,33 @@ import { assembleContext, estimateTokens } from "../context/assemble.ts";
 import type { Dev } from "../dev.ts";
 import { effortForTaskSize } from "../workers/efforts.ts";
 import * as gitOps from "../git.ts";
-import type { Execution, Task, TaskFailure } from "../schemas.ts";
+import type { Execution, Task, TaskFailure, WorkerType } from "../schemas.ts";
 import { runVerification } from "../verification.ts";
 import { WorkerUnavailableError } from "../workers/registry.ts";
 import type { WorkerCapability } from "../workers/types.ts";
+
+const MAX_RETRY_TIMEOUT_MS = 4 * 60 * 60 * 1000;
+
+/** How long a run may take: shell uses timeoutMs, agents use agentTimeoutMs. A retry after timeout doubles once. */
+export function timeoutFor(workerType: WorkerType, config: { timeoutMs: number; agentTimeoutMs: number }, previous?: TaskFailure | null): number {
+  const base = workerType === "shell" ? config.timeoutMs : config.agentTimeoutMs;
+  if (previous?.kind !== "timeout") return base;
+  const last = Number(previous.data?.timeoutMs);
+  const from = Number.isFinite(last) && last > 0 ? last : base;
+  return Math.min(from * 2, MAX_RETRY_TIMEOUT_MS);
+}
+
+/** "30 minutes", "2 hours" — what the board should show, not 1800s. */
+export function formatTimeout(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) {
+    const seconds = Math.max(1, Math.round(ms / 1000));
+    return seconds === 1 ? "1 second" : `${seconds} seconds`;
+  }
+  if (minutes < 90) return minutes === 1 ? "1 minute" : `${minutes} minutes`;
+  const hours = Math.round(minutes / 60);
+  return hours === 1 ? "1 hour" : `${hours} hours`;
+}
 
 export interface RunOptions {
   workerId?: string | null;
@@ -34,6 +57,7 @@ export async function runTask(dev: Dev, taskId: string, options: RunOptions = {}
     throw new Error(`Project ${project.name} has no repository yet; nothing can run`);
   }
   const projectPath = project.path;
+  const previousFailure = task.failure;
 
   // ----- preflight -----
   if (task.status === "BLOCKED" || task.status === "REVIEW") dev.tasks.retry(task.id);
@@ -115,7 +139,7 @@ export async function runTask(dev: Dev, taskId: string, options: RunOptions = {}
     }
 
     // ----- run -----
-    const timeoutMs = options.timeoutMs ?? dev.config.workers.timeoutMs;
+    const timeoutMs = options.timeoutMs ?? timeoutFor(worker.type, dev.config.workers, previousFailure);
     dev.events.emit("COMMAND_STARTED", { projectId: project.id, taskId: task.id, executionId: execution.id, data: { workerId: worker.id, command: current.command ?? worker.id, timeoutMs } });
     const result = await worker.run({
       taskId: task.id,
@@ -167,10 +191,13 @@ export async function runTask(dev: Dev, taskId: string, options: RunOptions = {}
       });
     }
     if (result.timedOut) {
-      return finish(dev, task, execution, { status: "timeout", exitCode: result.exitCode, error: `timed out after ${Math.round(timeoutMs / 1000)}s`, changedFiles, summary: result.summary, commandLine: result.commandLine, usage: result.usage }, {
+      const lasted = formatTimeout(timeoutMs);
+      const setting = worker.type === "shell" ? "workers.timeoutMs" : "workers.agentTimeoutMs";
+      return finish(dev, task, execution, { status: "timeout", exitCode: result.exitCode, error: `timed out after ${lasted}`, changedFiles, summary: result.summary, commandLine: result.commandLine, usage: result.usage }, {
         kind: "timeout",
-        reason: `Worker ${worker.id} exceeded ${Math.round(timeoutMs / 1000)}s`,
-        nextAction: "Split the task or raise workers.timeoutMs, then retry",
+        reason: `Worker ${worker.id} exceeded ${lasted}`,
+        nextAction: `Retry gets a longer cap (up to 4 hours). Or split the task, or raise ${setting}.`,
+        data: { timeoutMs, workerId: worker.id },
       });
     }
     if (result.launchError) {

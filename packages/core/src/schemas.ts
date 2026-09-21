@@ -107,6 +107,8 @@ export interface TaskFailure {
   nextAction: string;
   executionId?: string;
   at: string;
+  /** Facts about the failure (last timeout, etc.). Never prose. */
+  data?: Record<string, unknown>;
 }
 
 export type TaskKind = "epic" | "ticket" | "subtask" | "prep" | "decision";

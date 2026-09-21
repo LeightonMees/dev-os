@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { autoRun, runTask } from "../src/index.ts";
+import { autoRun, formatTimeout, runTask, timeoutFor } from "../src/index.ts";
 import { nodeExe, openTestDev, tempRepo } from "./helpers.ts";
 
 test("a shell task runs, captures changed files, passes verification, records evidence and reaches DONE", async () => {
@@ -95,7 +95,11 @@ test("timeouts and cancellation are structured too", async () => {
     const slow = dev.tasks.create({ projectId: project.id, title: "sleep", command: `${nodeExe} -e "setTimeout(()=>{}, 30000)"`, status: "READY" });
     const timedOut = await runTask(dev, slow.id, { timeoutMs: 1500 });
     assert.equal(timedOut.status, "timeout");
-    assert.equal(dev.tasks.get(slow.id)?.failure?.kind, "timeout");
+    const failure = dev.tasks.get(slow.id)?.failure;
+    assert.equal(failure?.kind, "timeout");
+    assert.match(failure?.reason ?? "", /second/);
+    assert.match(failure?.nextAction ?? "", /longer cap/i);
+    assert.equal(failure?.data?.timeoutMs, 1500);
 
     dev.tasks.retry(slow.id);
     const running = runTask(dev, slow.id);
@@ -145,6 +149,97 @@ test("auto-run executes a dependency chain in order and hands results downstream
     cleanup();
     repo.cleanup();
   }
+});
+
+test("autopilot promotes a backlog task with satisfied deps and runs it", async () => {
+  const { dev, cleanup } = openTestDev();
+  const repo = tempRepo();
+  try {
+    const project = dev.projects.add({ path: repo.path, name: "auto-promote" });
+    const task = dev.tasks.create({
+      projectId: project.id,
+      title: "from backlog",
+      command: `${nodeExe} -e "require('fs').writeFileSync('promoted.txt','ok')"`,
+      status: "BACKLOG",
+    });
+    const types: string[] = [];
+    const off = dev.events.on((e) => types.push(e.type));
+    const report = await autoRun(dev, { projectId: project.id, promoteBacklog: true, maxTasks: 1 });
+    off();
+    assert.equal(report.ran.length, 1);
+    assert.equal(report.ran[0]?.status, "DONE");
+    assert.equal(report.stoppedBecause, "max-tasks");
+    assert.equal(dev.tasks.get(task.id)?.status, "DONE");
+    assert.ok(types.includes("AUTO_RUN_STARTED"));
+    assert.ok(types.includes("AUTO_RUN_FINISHED"));
+  } finally {
+    cleanup();
+    repo.cleanup();
+  }
+});
+
+test("autopilot skips needsHuman and unmet deps, and says so when nothing can start", async () => {
+  const { dev, cleanup } = openTestDev();
+  const repo = tempRepo();
+  try {
+    const project = dev.projects.add({ path: repo.path, name: "auto-skip" });
+    const blocker = dev.tasks.create({ projectId: project.id, title: "blocker", status: "BACKLOG", needsHuman: "decide the approach" });
+    const waiting = dev.tasks.create({ projectId: project.id, title: "waiting", status: "BACKLOG", dependsOn: [blocker.id] });
+    const human = dev.tasks.create({ projectId: project.id, title: "ask first", status: "BACKLOG", needsHuman: "pick a colour" });
+    const free = dev.tasks.create({
+      projectId: project.id,
+      title: "free",
+      command: `${nodeExe} -e "require('fs').writeFileSync('free.txt','ok')"`,
+      status: "BACKLOG",
+    });
+    const report = await autoRun(dev, { projectId: project.id, promoteBacklog: true, maxTasks: 1 });
+    assert.equal(report.ran[0]?.title, "free");
+    assert.equal(dev.tasks.get(free.id)?.status, "DONE");
+    assert.equal(dev.tasks.get(human.id)?.status, "BACKLOG");
+    assert.equal(dev.tasks.get(waiting.id)?.status, "BACKLOG");
+
+    const empty = await autoRun(dev, { projectId: project.id, promoteBacklog: true });
+    assert.equal(empty.ran.length, 0);
+    assert.equal(empty.stoppedBecause, "no-runnable-tasks");
+    assert.match(empty.detail ?? "", /no Backlog task/i);
+  } finally {
+    cleanup();
+    repo.cleanup();
+  }
+});
+
+test("autopilot sees a promotable task past the default list cap of 500", async () => {
+  const { dev, cleanup } = openTestDev();
+  const repo = tempRepo();
+  try {
+    const project = dev.projects.add({ path: repo.path, name: "auto-cap" });
+    const stuck = dev.tasks.create({ projectId: project.id, title: "stuck-0", status: "BACKLOG", needsHuman: "wait" });
+    for (let i = 1; i < 501; i++) {
+      dev.tasks.create({ projectId: project.id, title: `stuck-${i}`, status: "BACKLOG", needsHuman: "wait", dependsOn: [stuck.id] });
+    }
+    const free = dev.tasks.create({
+      projectId: project.id,
+      title: "the one",
+      command: `${nodeExe} -e "require('fs').writeFileSync('cap.txt','ok')"`,
+      status: "BACKLOG",
+    });
+    assert.ok((dev.tasks.list({ projectId: project.id, status: "BACKLOG" }).length ?? 0) <= 500);
+    const report = await autoRun(dev, { projectId: project.id, promoteBacklog: true, maxTasks: 1 });
+    assert.equal(report.ran[0]?.title, "the one");
+    assert.equal(dev.tasks.get(free.id)?.status, "DONE");
+  } finally {
+    cleanup();
+    repo.cleanup();
+  }
+});
+
+test("agent timeout is 2 hours, shell is 30 minutes, and a timeout retry doubles", () => {
+  const shell = { timeoutMs: 30 * 60 * 1000, agentTimeoutMs: 2 * 60 * 60 * 1000 };
+  assert.equal(timeoutFor("shell", shell), 30 * 60 * 1000);
+  assert.equal(timeoutFor("cli-agent", shell), 2 * 60 * 60 * 1000);
+  assert.equal(timeoutFor("cli-agent", shell, { kind: "timeout", reason: "", nextAction: "", at: "", data: { timeoutMs: 2 * 60 * 60 * 1000 } }), 4 * 60 * 60 * 1000);
+  assert.equal(formatTimeout(30 * 60 * 1000), "30 minutes");
+  assert.equal(formatTimeout(2 * 60 * 60 * 1000), "2 hours");
 });
 
 test("an execution abandoned by a control-plane restart is reaped and its task leaves WORKING with a reason", async () => {

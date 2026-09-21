@@ -1,6 +1,6 @@
 {
   "name": "@dev/core",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "DEV control-plane core: projects, tasks, task graph, workers, execution, events, artifacts, evidence, context assembly, Nexus discovery.",

@@ -1,5 +1,9 @@
 # local state (database, logs, artifacts, config) - never committed
 .dev-home/
+*dev-home*/
+*.sqlite
+secrets.env
+keys.env
 .env
 .env.*
 !.env.example

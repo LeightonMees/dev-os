@@ -3,7 +3,7 @@ export interface ParsedArgs {
   flags: Record<string, string | boolean | string[]>;
 }
 
-const BOOLEAN_FLAGS = new Set(["json", "help", "h", "force", "follow", "yes", "y", "all", "desktop", "verbose", "no-wait", "detach", "stat", "staged", "read-only", "open", "git", "ready", "backlog", "manual-review", "quiet", "stop-on-failure", "full", "no-run", "foreground", "dev", "no-checkout"]);
+const BOOLEAN_FLAGS = new Set(["json", "help", "h", "force", "follow", "yes", "y", "all", "desktop", "verbose", "no-wait", "detach", "stat", "staged", "read-only", "open", "git", "ready", "backlog", "manual-review", "quiet", "stop-on-failure", "full", "no-run", "foreground", "dev", "no-checkout", "promote-backlog", "autopilot"]);
 
 /** Tiny argv parser: --key value, --key=value, boolean flags, repeated --key collects. */
 export function parseArgs(argv: string[]): ParsedArgs {

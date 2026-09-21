@@ -61,7 +61,7 @@ export function WorkView() {
 
   const startAutopilot = async (maxTasks: number | undefined) => {
     setAutopilotOpen(false);
-    await act(() => api.autoRun(currentProject.id, { promoteBacklog: true, maxTasks }), "Autopilot started");
+    await act(() => api.autoRun(currentProject.id, { promoteBacklog: true, maxTasks }));
   };
 
   return (
@@ -201,6 +201,7 @@ export function AutopilotDialog({ project, runnable, backlog, needsHuman, onCanc
   const [limit, setLimit] = useState("5");
   const [understood, setUnderstood] = useState(false);
   const max = limit === "unlimited" ? undefined : Number(limit);
+  const nothingToDo = runnable === 0 && backlog === 0;
   return (
     <Dialog
       title="Autopilot"
@@ -212,9 +213,15 @@ export function AutopilotDialog({ project, runnable, backlog, needsHuman, onCanc
           </button>
           <button
             className="btn danger"
-            disabled={!understood}
+            disabled={!understood || nothingToDo}
             // A disabled control must say why, or it reads as a broken button.
-            title={understood ? `Promote and run up to ${max === undefined ? "every" : max} task(s) without asking` : "Tick the box below first: autopilot works unattended, so it needs your acknowledgement"}
+            title={
+              nothingToDo
+                ? "No Ready tasks and no Backlog to promote"
+                : understood
+                  ? `Promote and run up to ${max === undefined ? "every" : max} task(s) without asking`
+                  : "Tick the box below first: autopilot works unattended, so it needs your acknowledgement"
+            }
             onClick={() => onStart(max)}
           >
             Start autopilot

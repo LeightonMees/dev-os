@@ -5,13 +5,16 @@
 // This never touches the working repository. It copies out, so the thing you
 // publish is a tree you can read in full before anyone else sees it.
 //
-//   node scripts/prepare-release.mjs --out ../DEV-public
-//   node scripts/prepare-release.mjs --out ../DEV-public --force
+//   node scripts/prepare-release.mjs --out ../DEV-public                  first release: fresh history
+//   node scripts/prepare-release.mjs --out ../DEV-public -m "fix: ..."    later: commit on top of it
+//   node scripts/prepare-release.mjs --out ../DEV-public --force          throw the copy away and start over
 //
-// Afterwards, read the tree, then push it wherever you like.
+// When --out already holds a git repository, the tree is synchronised into it
+// and committed as the next commit, so the public history grows normally and
+// the remote you added stays put. Afterwards, read the tree, then push.
 
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -35,6 +38,7 @@ const EXCLUDE = new Set([
   // --- local state and secrets ---
   ".env",
   ".dev-home",
+  "DesktopDEV.dev-home",
   ".playwright-mcp",
   // --- build output and dependencies ---
   "node_modules",
@@ -72,10 +76,11 @@ const FORBIDDEN_CONTENT = [
 const TEXT = new Set([".ts", ".tsx", ".js", ".mjs", ".cjs", ".json", ".md", ".yml", ".yaml", ".css", ".html", ".toml", ".rs", ".cmd", ".sh", ".example"]);
 
 function parseArgs(argv) {
-  const out = { force: false };
+  const out = { force: false, message: null };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === "--out") out.out = argv[i + 1];
     if (argv[i] === "--force") out.force = true;
+    if (argv[i] === "-m" || argv[i] === "--message") out.message = argv[i + 1] ?? null;
   }
   return out;
 }
@@ -100,12 +105,22 @@ if (OUT === ROOT) {
   console.error("Refusing to write the release into the working repository.");
   process.exit(2);
 }
-if (existsSync(OUT)) {
+// Update mode: the copy is already a repository (with, presumably, the public
+// remote attached). Empty it of everything but .git and lay the fresh tree down,
+// so deletions in the source become deletions in the release too.
+const updating = existsSync(join(OUT, ".git")) && !args.force;
+if (existsSync(OUT) && !updating) {
   if (!args.force) {
-    console.error(`${OUT} already exists. Pass --force to replace it.`);
+    console.error(`${OUT} already exists and is not a git repository. Pass --force to replace it.`);
     process.exit(2);
   }
   rmSync(OUT, { recursive: true, force: true });
+}
+if (updating) {
+  for (const entry of readdirSync(OUT)) {
+    if (entry === ".git") continue;
+    rmSync(join(OUT, entry), { recursive: true, force: true });
+  }
 }
 
 // ----- copy, minus everything excluded -----
@@ -164,15 +179,30 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-// ----- fresh history: one commit, nothing recoverable behind it -----
 const git = (...a) => execFileSync("git", a, { cwd: OUT, stdio: "pipe" }).toString().trim();
-git("init", "-q", "-b", "main");
-git("add", "-A");
-writeFileSync(join(OUT, ".git", "COMMIT_TEMPLATE"), "");
-execFileSync("git", ["commit", "-q", "-m", "DEV: initial public release\n\nA local development operating system: one core, a control plane, a CLI and a desktop app."], { cwd: OUT, stdio: "pipe" });
-const count = git("rev-list", "--count", "HEAD");
-
-console.log(`\nRelease tree ready at ${OUT}`);
-console.log(`  ${copied} files copied, ${scanned} text files scanned, ${count} commit in history.`);
-console.log("\nNothing private was found. Read the tree yourself before publishing:");
-console.log(`  cd ${OUT} && git ls-files | less\n`);
+if (updating) {
+  // ----- next commit on the existing public history -----
+  git("add", "-A");
+  const staged = git("status", "--porcelain");
+  if (staged === "") {
+    console.log(`\nRelease tree at ${OUT} already matches the source; nothing to commit.`);
+    process.exit(0);
+  }
+  const message = args.message ?? `Release ${new Date().toISOString().slice(0, 10)}`;
+  execFileSync("git", ["commit", "-q", "-m", message], { cwd: OUT, stdio: "pipe" });
+  const changed = staged.split("\n").length;
+  console.log(`\nRelease tree updated at ${OUT}`);
+  console.log(`  ${copied} files synced, ${scanned} text files scanned, ${changed} path(s) changed, committed as "${message}".`);
+  console.log("\nNothing private was found. Review, then push:");
+  console.log(`  cd ${OUT} && git show --stat HEAD && git push\n`);
+} else {
+  // ----- fresh history: one commit, nothing recoverable behind it -----
+  git("init", "-q", "-b", "main");
+  git("add", "-A");
+  execFileSync("git", ["commit", "-q", "-m", "DEV: initial public release\n\nA local development operating system: one core, a control plane, a CLI and a desktop app."], { cwd: OUT, stdio: "pipe" });
+  const count = git("rev-list", "--count", "HEAD");
+  console.log(`\nRelease tree ready at ${OUT}`);
+  console.log(`  ${copied} files copied, ${scanned} text files scanned, ${count} commit in history.`);
+  console.log("\nNothing private was found. Read the tree yourself before publishing:");
+  console.log(`  cd ${OUT} && git ls-files | less\n`);
+}

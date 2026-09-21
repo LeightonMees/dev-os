@@ -250,12 +250,20 @@ export const CONFIG_SCHEMA = {
       active: true,
     }),
     timeoutMs: field<number>({
-      label: "Execution timeout (ms)",
+      label: "Shell timeout",
       type: "number",
       default: 30 * 60 * 1000,
-      description: "How long one worker run may take before it is cancelled.",
+      description: "How long a shell command may run before it is cancelled. Stored in milliseconds (default 30 minutes). Agent workers use agentTimeoutMs.",
       active: true,
       restricted: "workers.timeoutMs may only be lowered by a project, session or task",
+    }),
+    agentTimeoutMs: field<number>({
+      label: "Agent timeout",
+      type: "number",
+      default: 2 * 60 * 60 * 1000,
+      description: "How long a coding agent (Claude Code, Codex, Grok, OpenCode, API, Ollama) may run before it is cancelled. Stored in milliseconds (default 2 hours). A retry after a timeout doubles this once, up to 4 hours.",
+      active: true,
+      restricted: "workers.agentTimeoutMs may only be lowered by a project, session or task",
     }),
     concurrency: field<number>({
       label: "Concurrent runs",

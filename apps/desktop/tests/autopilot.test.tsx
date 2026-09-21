@@ -41,4 +41,12 @@ describe("Autopilot dialog", () => {
     open();
     expect(screen.getByText("12")).toBeTruthy();
   });
+
+  it("will not start when there is nothing Ready and nothing in Backlog", () => {
+    render(<AutopilotDialog project="demo" runnable={0} backlog={0} needsHuman={0} onCancel={() => {}} onStart={vi.fn()} />);
+    const start = screen.getByRole("button", { name: /start autopilot/i }) as HTMLButtonElement;
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(start.disabled).toBe(true);
+    expect(start.title).toMatch(/no ready/i);
+  });
 });

@@ -21,7 +21,7 @@ ${c.dim("GETTING STARTED")}
   dev task add "<title>"           create a task (--command, --verify, --depends, --req, --accept)
   dev plan "<goal>"                goal → bounded plan → tasks (asks before persisting)
   dev task run <id>                execute one task with a real worker
-  dev auto                         run every runnable task in dependency order
+  dev auto                         run every runnable task in dependency order (--promote-backlog)
   dev ui                           launch the desktop app (starts the control plane)
 
 ${c.dim("PROJECTS")}
@@ -93,10 +93,11 @@ const SUB_HELP: Record<string, string> = {
 
   Inspects the project, asks Nexus for capabilities, has one planning worker produce a small
   bounded task list for the next milestone, shows it, and only persists it after you confirm.`,
-  auto: `dev auto [--max n] [--worker <id>] [--stop-on-failure] [--detach]
+  auto: `dev auto [--max n] [--worker <id>] [--stop-on-failure] [--detach] [--promote-backlog]
 
   Executes runnable tasks (READY with all dependencies DONE) one after another in dependency
-  order. Each task receives the result summaries of its upstream tasks in its context.`,
+  order. Each task receives the result summaries of its upstream tasks in its context.
+  --promote-backlog (alias --autopilot) also pulls Backlog tasks whose dependencies are done.`,
 };
 
 export async function main(argv: string[]): Promise<number> {

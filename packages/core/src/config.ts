@@ -188,6 +188,7 @@ const RESTRICTED: Record<string, (current: unknown, next: unknown) => boolean> =
     Array.isArray(next) && Array.isArray(current) && next.every((file) => current.includes(file)),
   "approvals.requireForCommit": (current, next) => next === true || next === current,
   "workers.timeoutMs": (current, next) => typeof next === "number" && typeof current === "number" && next <= current,
+  "workers.agentTimeoutMs": (current, next) => typeof next === "number" && typeof current === "number" && next <= current,
   "chat.maxToolCalls": (current, next) => typeof next === "number" && typeof current === "number" && next <= current,
   "nexus.enabled": (current, next) => next === false || next === current,
   "projects.defaultDir": () => false,

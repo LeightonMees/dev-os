@@ -550,4 +550,6 @@ export const EVENT_TYPES = [
   "PLAN_APPLIED",
   "GIT_COMMIT",
   "CHAT_MESSAGE",
+  "AUTO_RUN_STARTED",
+  "AUTO_RUN_FINISHED",
 ] as const;

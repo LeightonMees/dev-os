@@ -7,7 +7,7 @@ interface Field {
   key: string;
   label: string;
   hint?: string;
-  type?: "text" | "number" | "boolean" | "select" | "model" | "effort" | "worker" | "capability-preferences";
+  type?: "text" | "number" | "minutes" | "boolean" | "select" | "model" | "effort" | "worker" | "capability-preferences";
   /** For types "model" and "effort": the worker whose real list fills the dropdown. */
   worker?: string;
   options?: string[];
@@ -19,7 +19,8 @@ const GROUPS: { title: string; fields: Field[] }[] = [
     fields: [
       { key: "workers.preferences", label: "Preference order (fallback)", hint: 'Used when a kind of work has no list of its own. Leave it empty ([]) to let the benchmark evidence below decide, or state your own order as a JSON array, e.g. ["codex","claude-code","shell"]. A worker set on a task always wins over both.' },
       { key: "workers.preferencesByCapability", label: "Who is best at what", type: "capability-preferences", hint: "Workers are not equally good at everything. Set the order per kind of work and DEV routes by the task's kind: decisions and epics ask for planning, prep tasks ask for research, the rest ask for code." },
-      { key: "workers.timeoutMs", label: "Execution timeout (ms)", type: "number" },
+      { key: "workers.timeoutMs", label: "Shell timeout (minutes)", type: "minutes", hint: "Hung commands die after this. Default 30." },
+      { key: "workers.agentTimeoutMs", label: "Agent timeout (minutes)", type: "minutes", hint: "Claude Code, Codex, Grok and the other agents. Default 120. A retry after a timeout doubles once, up to 4 hours." },
       { key: "workers.claudeCode.command", label: "Claude Code command" },
       { key: "workers.claudeCode.model", label: "Claude Code model", type: "model", worker: "claude-code", hint: "null = whatever the CLI defaults to" },
       { key: "workers.claudeCode.effort", label: "Claude Code reasoning effort", type: "effort", worker: "claude-code" },
@@ -272,6 +273,33 @@ export function SettingsView() {
                             <WorkerModelField worker={f.worker as string} value={current === null ? "" : String(current)} onSave={(v) => save(f.key, v)} />
                           ) : f.type === "effort" ? (
                             <WorkerEffortField worker={f.worker as string} value={current === null ? "" : String(current)} onSave={(v) => save(f.key, v)} />
+                          ) : f.type === "minutes" ? (
+                            <div className="row">
+                              <input
+                                className="input mono"
+                                style={{ maxWidth: 120 }}
+                                value={draft ?? String(Math.round(Number(current) / 60_000) || 0)}
+                                onChange={(e) => setDrafts((d) => ({ ...d, [f.key]: e.target.value }))}
+                                onKeyDown={(e) => {
+                                  if (e.key !== "Enter" || draft === undefined) return;
+                                  const minutes = Number(draft);
+                                  if (!Number.isFinite(minutes) || minutes < 0) return;
+                                  void save(f.key, String(Math.round(minutes * 60_000)));
+                                }}
+                              />
+                              {draft !== undefined && (
+                                <button
+                                  className="btn small primary"
+                                  onClick={() => {
+                                    const minutes = Number(draft);
+                                    if (!Number.isFinite(minutes) || minutes < 0) return;
+                                    void save(f.key, String(Math.round(minutes * 60_000)));
+                                  }}
+                                >
+                                  Save
+                                </button>
+                              )}
+                            </div>
                           ) : (
                             <div className="row">
                               <input

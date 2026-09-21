@@ -41,6 +41,8 @@ export const EVENT_TYPES = [
   "FLOW_DELETED",
   "FLOW_RUN_STARTED",
   "FLOW_RUN_FINISHED",
+  "AUTO_RUN_STARTED",
+  "AUTO_RUN_FINISHED",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

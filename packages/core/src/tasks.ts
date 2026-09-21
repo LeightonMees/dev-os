@@ -87,7 +87,8 @@ export interface TaskFilter {
   milestone?: string;
   epic?: string;
   kind?: TaskKind;
-  limit?: number;
+  /** Cap on rows. `null` means no cap (autopilot must see the whole backlog). Default 500. */
+  limit?: number | null;
 }
 
 export class TaskStore {
@@ -214,12 +215,9 @@ export class TaskStore {
       where.push("kind = ?");
       params.push(filter.kind);
     }
-    const limit = filter.limit ?? 500;
-    const rows = this.#db.all(
-      `SELECT * FROM tasks ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY ordinal ASC, created_at ASC LIMIT ?`,
-      ...params,
-      limit,
-    );
+    const unlimited = filter.limit === null;
+    const sql = `SELECT * FROM tasks ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY ordinal ASC, created_at ASC${unlimited ? "" : " LIMIT ?"}`;
+    const rows = unlimited ? this.#db.all(sql, ...params) : this.#db.all(sql, ...params, filter.limit ?? 500);
     return rows.map((row) => this.#hydrate(row));
   }
 

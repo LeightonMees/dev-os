@@ -136,17 +136,18 @@ export async function autoCommand(ctx: CliContext): Promise<number> {
   if (!project) throw new UsageError("No project");
   const maxTasks = flagNumber(ctx.flags, "max");
   const workerId = flagString(ctx.flags, "worker") ?? null;
+  const promoteBacklog = flagBool(ctx.flags, "promote-backlog") || flagBool(ctx.flags, "autopilot");
   const runnable = ctx.dev.tasks.runnable(project.id);
-  if (runnable.length === 0) {
+  if (runnable.length === 0 && !promoteBacklog) {
     if (ctx.json) printJson({ ran: [], stoppedBecause: "no-runnable-tasks" });
-    else println(c.dim(`Nothing runnable in ${project.name}. Tasks must be READY with all dependencies DONE.`));
+    else println(c.dim(`Nothing runnable in ${project.name}. Tasks must be READY with all dependencies DONE. Use --promote-backlog to let Autopilot pull from Backlog.`));
     return 0;
   }
   const cp = await controlPlane(ctx.home);
   if (cp) {
     const client = new ControlPlaneClient(cp.url);
-    if (!ctx.json) eprintln(c.dim(`▶ auto-run ${project.name}: ${runnable.length} runnable now  via control plane`));
-    await client.call("POST", `/api/projects/${project.id}/auto`, { maxTasks, workerId, continueOnFailure: !flagBool(ctx.flags, "stop-on-failure") });
+    if (!ctx.json) eprintln(c.dim(`▶ ${promoteBacklog ? "autopilot" : "auto-run"} ${project.name}: ${runnable.length} runnable now  via control plane`));
+    await client.call("POST", `/api/projects/${project.id}/auto`, { maxTasks, workerId, continueOnFailure: !flagBool(ctx.flags, "stop-on-failure"), promoteBacklog });
     if (flagBool(ctx.flags, "detach")) {
       println(ctx.json ? JSON.stringify({ started: true }) : `${c.green("✓")} auto-run started in the control plane (dev status shows progress)`);
       return 0;
@@ -170,6 +171,7 @@ export async function autoCommand(ctx: CliContext): Promise<number> {
       workerId,
       signal: controller.signal,
       continueOnFailure: !flagBool(ctx.flags, "stop-on-failure"),
+      promoteBacklog,
       onTaskStart: (t) => (ctx.json ? undefined : eprintln(`\n${c.cyan("▶")} ${t.id} ${t.title}`)),
     });
     if (ctx.json) printJson(report);
