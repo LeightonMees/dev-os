@@ -117,10 +117,13 @@ test("settings nothing reads yet are marked inactive so the UI can say so", () =
     "notifications",
     "advanced",
   ]);
+  // A section can be mostly declared-only while one of its settings is live:
+  // git.isolation is read by the runner, its neighbours are not yet.
+  const live = ["workers.timeoutMs", "workers.agentTimeoutMs", "context.budgetTokens", "ui.theme", "privacy.mode", "nexus.enabled", "chat.worker", "git.isolation"];
   for (const field of CONFIG_FIELDS) {
+    if (live.includes(field.key)) continue;
     if (declaredOnly.has(field.section)) assert.equal(field.active, false, `${field.key} claims to be read already`);
   }
-  const live = ["workers.timeoutMs", "workers.agentTimeoutMs", "context.budgetTokens", "ui.theme", "privacy.mode", "nexus.enabled", "chat.worker"];
   for (const key of live) assert.equal(configFieldFor(key)?.active, true, `${key} should be active`);
 });
 

@@ -34,6 +34,10 @@ export const EVENT_TYPES = [
   "PLAN_PROPOSED",
   "PLAN_APPLIED",
   "GIT_COMMIT",
+  /** A run was given its own git worktree and branch instead of the user's checkout. */
+  "WORKTREE_CREATED",
+  /** The run's changes were committed on its branch; the worktree itself is gone. */
+  "WORKTREE_COMMITTED",
   "CHAT_MESSAGE",
   /** One chat model handed the turn to another (rate limit, overload or upstream fault). */
   "CHAT_BRAIN_SWITCHED",

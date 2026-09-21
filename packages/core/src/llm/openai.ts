@@ -74,7 +74,7 @@ export async function chatCompletion(options: ChatOptions): Promise<ChatResult> 
       headers: {
         "content-type": "application/json",
         ...(options.apiKey ? { authorization: `Bearer ${options.apiKey}` } : {}),
-        ...(options.extraHeaders ?? {}),
+        ...options.extraHeaders,
       },
       body: JSON.stringify(body),
       signal: controller.signal,

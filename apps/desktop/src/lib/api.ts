@@ -2,7 +2,7 @@ import type { Approval, Artifact, ContextSection, ContextSnapshot, Decision, Dev
 
 export interface ArtifactMedia {
   type: string;
-  form: "html" | "svg" | "image" | "markdown" | "pdf" | "text" | "binary";
+  form: "html" | "svg" | "image" | "markdown" | "pdf" | "model" | "text" | "binary";
   text: boolean;
 }
 
@@ -292,8 +292,9 @@ export class Api {
   gitCheckout(id: string, ref: string) {
     return this.request<GitStatus>("POST", `/api/projects/${id}/git/checkout`, { ref });
   }
+  /** Either the commit, or — when the project requires approval — the approval that was filed instead. */
   gitCommit(id: string, message: string, taskId?: string) {
-    return this.request<{ hash: string; short: string; subject: string }>("POST", `/api/projects/${id}/git/commit`, { message, taskId });
+    return this.request<{ hash: string; short: string; subject: string } | { approvalRequired: true; approval: Approval }>("POST", `/api/projects/${id}/git/commit`, { message, taskId });
   }
   decisions(projectId: string) {
     return this.request<Decision[]>("GET", `/api/projects/${projectId}/decisions`);

@@ -327,3 +327,49 @@ test("autopilot promotes a backlog task over HTTP and records AUTO_RUN events", 
     rmSync(repo, { recursive: true, force: true });
   }
 });
+
+test("a project that requires approval files the commit as an approval, and approving it performs the commit", async () => {
+  const home = tempRoot();
+  const repo = tempRoot();
+  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: repo });
+  execFileSync("git", ["config", "user.email", "t@example.invalid"], { cwd: repo });
+  execFileSync("git", ["config", "user.name", "t"], { cwd: repo });
+  writeFileSync(join(repo, "README.md"), "# t");
+  execFileSync("git", ["add", "-A"], { cwd: repo });
+  execFileSync("git", ["commit", "-q", "-m", "init"], { cwd: repo });
+  mkdirSync(join(repo, ".dev"), { recursive: true });
+  writeFileSync(join(repo, ".dev", "config.json"), JSON.stringify({ approvals: { requireForCommit: true } }));
+  const cp = await start({ home, port: 0 });
+  try {
+    const project = await api<{ id: string }>(cp.url, "POST", "/api/projects", { path: repo, name: "gated" });
+    writeFileSync(join(repo, "notes.md"), "gated change");
+
+    const response = await fetch(`${cp.url}/api/projects/${project.id}/git/commit`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: "docs: add notes" }) });
+    assert.equal(response.status, 202, "accepted for approval, not performed");
+    const filed = (await response.json()) as { approvalRequired: boolean; approval: { id: string; action: string; reason: string; status: string } };
+    assert.equal(filed.approvalRequired, true);
+    assert.equal(filed.approval.action, "git.commit");
+    assert.equal(filed.approval.reason, "docs: add notes");
+    assert.equal(execFileSync("git", ["log", "--oneline"], { cwd: repo }).toString().trim().split("\n").length, 1, "nothing committed yet");
+
+    const pending = await api<{ id: string }[]>(cp.url, "GET", "/api/approvals?status=pending");
+    assert.ok(pending.some((a) => a.id === filed.approval.id), "the approval is visible where the user looks");
+
+    const resolved = await api<{ status: string; performed?: { commit: { subject: string } } }>(cp.url, "POST", `/api/approvals/${filed.approval.id}/resolve`, { status: "approved", note: "fine" });
+    assert.equal(resolved.status, "approved");
+    assert.equal(resolved.performed?.commit.subject, "docs: add notes", "approving performed the commit with the filed message");
+    assert.equal(execFileSync("git", ["log", "--oneline"], { cwd: repo }).toString().trim().split("\n").length, 2);
+
+    // Denying a filed commit leaves the tree exactly as it was.
+    writeFileSync(join(repo, "more.md"), "another");
+    const second = (await (await fetch(`${cp.url}/api/projects/${project.id}/git/commit`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: "docs: more" }) })).json()) as { approval: { id: string } };
+    const denied = await api<{ status: string; performed?: unknown }>(cp.url, "POST", `/api/approvals/${second.approval.id}/resolve`, { status: "denied" });
+    assert.equal(denied.status, "denied");
+    assert.equal(denied.performed, undefined);
+    assert.equal(execFileSync("git", ["log", "--oneline"], { cwd: repo }).toString().trim().split("\n").length, 2, "denied means not committed");
+  } finally {
+    await cp.close();
+    rmSync(home, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true });
+  }
+});

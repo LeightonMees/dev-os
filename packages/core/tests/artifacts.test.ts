@@ -73,7 +73,8 @@ test("media form is derived from the extension, and unknown bytes stay opaque", 
   assert.equal(artifactMedia("spec.pdf").type, "application/pdf");
   assert.equal(artifactMedia("run.log").form, "text");
   assert.equal(artifactMedia("execution-1").form, "text", "extensionless artifacts are logs");
-  assert.equal(artifactMedia("mesh.glb").form, "binary", "meshes are carried but not claimed as viewable");
+  assert.equal(artifactMedia("mesh.glb").form, "model", "meshes get the 3D viewport");
+  assert.equal(artifactMedia("scene.gltf").type, "model/gltf+json");
   assert.equal(artifactMedia("thing.sqlite").form, "binary");
 });
 

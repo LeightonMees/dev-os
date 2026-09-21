@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
 
 import { autoRun, formatTimeout, runTask, timeoutFor } from "../src/index.ts";
-import { nodeExe, openTestDev, tempRepo } from "./helpers.ts";
+import { nodeExe, openTestDev, tempRepo, tempRoot } from "./helpers.ts";
 
 test("a shell task runs, captures changed files, passes verification, records evidence and reaches DONE", async () => {
   const { dev, cleanup } = openTestDev();
@@ -286,4 +288,62 @@ test("a worker refused permission to run commands fails the task instead of look
   assert.equal(wasPermissionBlocked("Added a permissions table to the docs and ran the tests."), false);
   assert.equal(wasPermissionBlocked("All 12 tests pass."), false);
   assert.equal(wasPermissionBlocked(""), false);
+});
+
+test("worktree isolation runs the task on its own branch and leaves the checkout untouched", async () => {
+  const { dev, cleanup } = openTestDev();
+  const repo = tempRepo();
+  try {
+    const project = dev.projects.add({ path: repo.path, name: "isolated" });
+    // Project-scoped setting, the way a real project would opt in.
+    mkdirSync(join(repo.path, ".dev"), { recursive: true });
+    writeFileSync(join(repo.path, ".dev", "config.json"), JSON.stringify({ git: { isolation: "worktree" } }));
+    const task = dev.tasks.create({
+      projectId: project.id,
+      title: "write a note in isolation",
+      command: `${nodeExe} -e "require('fs').writeFileSync('note.txt','from the worktree')"`,
+      verification: [{ kind: "file-exists", path: "note.txt" }],
+      status: "READY",
+    });
+    const seen: string[] = [];
+    dev.events.on((e) => seen.push(e.type));
+
+    const execution = await runTask(dev, task.id);
+    assert.equal(execution.status, "succeeded");
+    assert.deepEqual(execution.changedFiles, ["note.txt"]);
+    assert.equal(dev.tasks.get(task.id)?.status, "DONE");
+
+    // The user's checkout never saw the file; the branch did.
+    assert.ok(!existsSync(join(repo.path, "note.txt")), "checkout is untouched");
+    const onBranch = execFileSync("git", ["show", `dev/${task.id}:note.txt`], { cwd: repo.path }).toString();
+    assert.equal(onBranch, "from the worktree");
+    const mainLog = execFileSync("git", ["log", "--oneline", "main"], { cwd: repo.path }).toString().trim().split("\n");
+    assert.equal(mainLog.length, 1, "main has only the initial commit");
+
+    // The worktree directory itself is cleaned up; the branch is the record.
+    assert.ok(!existsSync(execution.cwd), `worktree removed: ${execution.cwd}`);
+    assert.notEqual(execution.cwd, repo.path, "the execution records where it actually ran");
+    assert.ok(seen.includes("WORKTREE_CREATED") && seen.includes("WORKTREE_COMMITTED"), seen.join(","));
+    assert.match(dev.tasks.get(task.id)?.resultSummary ?? "", /branch dev\//);
+  } finally {
+    repo.cleanup();
+    cleanup();
+  }
+});
+
+test("worktree isolation on a plain directory falls back to running in place, and says so", async () => {
+  const { dev, cleanup } = openTestDev();
+  const dir = tempRoot();
+  try {
+    const project = dev.projects.add({ path: dir, name: "plain" });
+    mkdirSync(join(dir, ".dev"), { recursive: true });
+    writeFileSync(join(dir, ".dev", "config.json"), JSON.stringify({ git: { isolation: "worktree" } }));
+    const task = dev.tasks.create({ projectId: project.id, title: "plain run", command: `${nodeExe} -e "console.log('ok')"`, status: "READY" });
+    const execution = await runTask(dev, task.id);
+    assert.equal(execution.status, "succeeded");
+    assert.equal(execution.cwd, dir);
+    assert.match(readFileSync(execution.logPath as string, "utf8"), /not a git repository; running in place/);
+  } finally {
+    cleanup();
+  }
 });

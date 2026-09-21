@@ -10,14 +10,12 @@ Kept deliberately small. Long-term ideas live here as one line each, not as tick
 ## NEXT
 
 - Interactive flows: n8n-style workflows of shell commands, AI prompts, human inputs, conditions and loops, with a canvas and a live run view (Executable Agent Workflows, "Flow editor V1").
-- Worktree isolation per task run (git helpers exist; the runner works in place today).
-- Approval gates on consequential actions (commit/push/deploy) using the existing approvals store.
+- Approval gates on push and deploy (commits are gated today via `approvals.requireForCommit`).
 - Codex structured output parsing (today Codex output is captured as text).
 
 ## LATER
 
-- Design bridge: pull Figma frames and Modly meshes in as artifacts through Nexus, and push edits back.
-- A 3D viewport for GLB/GLTF artifacts (they are stored and served today, but not drawn).
+- Design bridge: pull Figma frames and Modly meshes in as artifacts through Nexus, and push edits back (the GLB viewport is in place; the bridge waits on Nexus stdio working from DEV).
 - Direct manipulation on the artifact canvas: select and edit elements inside an artboard, not just its source.
 - Smarter worker routing from recorded execution outcomes.
 - Screenshot/browser verification kind through the Nexus playwright server.

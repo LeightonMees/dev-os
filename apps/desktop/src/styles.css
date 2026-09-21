@@ -2277,3 +2277,21 @@ ul.bullets.editable {
   border-color: var(--rule);
   background: transparent;
 }
+
+.artifact-model {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.artifact-model-stage {
+  flex: 1;
+  min-height: 0;
+  background:
+    radial-gradient(circle at 50% 40%, #2a2f36 0%, var(--ink-0) 70%);
+}
+.artifact-model-stage canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}

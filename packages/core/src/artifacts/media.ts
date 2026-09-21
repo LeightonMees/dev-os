@@ -6,7 +6,7 @@
 import { extname } from "node:path";
 
 /** How the artifact zone can present a file. */
-export type ArtifactMediaForm = "html" | "svg" | "image" | "markdown" | "pdf" | "text" | "binary";
+export type ArtifactMediaForm = "html" | "svg" | "image" | "markdown" | "pdf" | "model" | "text" | "binary";
 
 export interface ArtifactMedia {
   /** Content-Type to serve the raw bytes with. */
@@ -48,8 +48,8 @@ const BY_EXT: Record<string, ArtifactMedia> = {
   ".yaml": { type: "text/plain; charset=utf-8", form: "text", text: true },
   ".xml": { type: "text/plain; charset=utf-8", form: "text", text: true },
   ".sh": { type: "text/plain; charset=utf-8", form: "text", text: true },
-  ".glb": { type: "model/gltf-binary", form: "binary", text: false },
-  ".gltf": { type: "model/gltf+json", form: "binary", text: false },
+  ".glb": { type: "model/gltf-binary", form: "model", text: false },
+  ".gltf": { type: "model/gltf+json", form: "model", text: false },
 };
 
 /** Media for a path. Unknown extensions are treated as opaque bytes. */

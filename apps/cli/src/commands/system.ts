@@ -193,6 +193,45 @@ export async function resourcesCommand(ctx: CliContext, sub: string | undefined,
   return 0;
 }
 
+/**
+ * Every file a run produced, or one of them in full. Artifacts were only ever
+ * reachable through `task show`; a project-wide view is how you find the diff
+ * you half-remember.
+ */
+export async function artifactsCommand(ctx: CliContext, sub: string | undefined, rest: string[]): Promise<number> {
+  if (sub === "show") {
+    const id = rest[0];
+    if (!id) throw new UsageError("Usage: dev artifacts show <artifactId>");
+    const artifact = ctx.dev.artifacts.get(id);
+    if (!artifact) throw new UsageError(`Unknown artifact ${id}`);
+    if (ctx.json) {
+      printJson(artifact);
+      return 0;
+    }
+    println(kv([["id", artifact.id], ["kind", artifact.kind], ["name", artifact.name], ["path", artifact.path], ["size", `${artifact.size} B`], ["task", artifact.taskId ?? "—"], ["execution", artifact.executionId ?? "—"], ["created", artifact.createdAt]]));
+    if (typeof artifact.meta.version === "number") println(c.dim(`version ${String(artifact.meta.version)} of ${String(artifact.meta.rootId)}`));
+    return 0;
+  }
+  const project = currentProject(ctx, { required: false });
+  const taskId = flagString(ctx.flags, "task") ?? (sub && sub !== "list" ? sub : undefined);
+  const kind = flagString(ctx.flags, "kind");
+  const limit = flagNumber(ctx.flags, "limit") ?? 50;
+  let artifacts = ctx.dev.artifacts.list({ projectId: project?.id, taskId, limit });
+  if (kind) artifacts = artifacts.filter((a) => a.kind === kind);
+  if (ctx.json) {
+    printJson(artifacts);
+    return 0;
+  }
+  if (artifacts.length === 0) {
+    println(c.dim(project ? `No artifacts in ${project.name} yet. Every run produces a log; diffs and reports follow.` : "No artifacts yet."));
+    return 0;
+  }
+  const titles = new Map(ctx.dev.tasks.list({ projectId: project?.id, limit: 1000 }).map((t) => [t.id, t.title]));
+  println(table(artifacts.map((a) => [a.id, a.kind, truncate(a.name, 32), truncate(a.taskId ? (titles.get(a.taskId) ?? a.taskId) : "—", 36), `${a.size} B`, ago(a.createdAt)]), { header: ["ID", "KIND", "NAME", "TASK", "SIZE", "CREATED"] }));
+  println(c.dim("dev artifacts show <id> for the path and details; --kind diff|log|report|test-result to filter"));
+  return 0;
+}
+
 export async function eventsCommand(ctx: CliContext): Promise<number> {
   const project = currentProject(ctx, { required: false });
   const limit = flagNumber(ctx.flags, "limit") ?? 40;

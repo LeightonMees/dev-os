@@ -57,10 +57,18 @@ describe("artifact preview", () => {
     expect(container.querySelector("img")!.getAttribute("src")).toBe("http://cp/api/artifacts/art_1/raw");
   });
 
-  it("says plainly that a mesh is not drawn rather than showing an empty frame", () => {
-    const h = head({ artifact: artifact({ name: "prop.glb", path: "C:/tmp/prop.glb" }), media: { type: "model/gltf-binary", form: "binary", text: false }, content: "", editable: false });
+  it("draws a mesh in the 3D viewer, and says so plainly when WebGL is missing rather than showing a black box", () => {
+    const h = head({ artifact: artifact({ name: "prop.glb", path: "C:/tmp/prop.glb" }), media: { type: "model/gltf-binary", form: "model", text: false }, content: "", editable: false });
     render(<ArtifactPreview head={h} rawUrl="http://cp/raw" />);
-    expect(screen.getByText(/no viewport for them in this build/i)).toBeTruthy();
+    // jsdom has no WebGL: the honest outcome is the stated fallback, not a silent blank.
+    expect(screen.getByRole("img", { name: /prop\.glb, 3D model/i })).toBeTruthy();
+    expect(screen.getByText(/WebGL is not available/i)).toBeTruthy();
+  });
+
+  it("still names an unknown binary honestly", () => {
+    const h = head({ artifact: artifact({ name: "db.sqlite", path: "C:/tmp/db.sqlite" }), media: { type: "application/octet-stream", form: "binary", text: false }, content: "", editable: false });
+    render(<ArtifactPreview head={h} rawUrl="http://cp/raw" />);
+    expect(screen.getByText(/not something DEV can draw yet/i)).toBeTruthy();
   });
 });
 

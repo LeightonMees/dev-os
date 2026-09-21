@@ -151,6 +151,7 @@ export const APPROVAL_POLICIES = ["ALWAYS_ALLOW", "ALLOW_WITHIN_TICKET", "ASK", 
 const EXPERIENCE_LEVELS = ["beginner", "intermediate", "advanced"] as const;
 const EXPLANATION_DEPTHS = ["brief", "normal", "deep"] as const;
 const COMMIT_STYLES = ["conventional", "plain"] as const;
+export const ISOLATION_MODES = ["in-place", "worktree"] as const;
 const SANDBOX_MODES = ["none", "directory", "container"] as const;
 const UI_DENSITIES = ["comfortable", "compact"] as const;
 
@@ -223,7 +224,9 @@ export const CONFIG_SCHEMA = {
     defaultDir: field<string>({
       label: "Default project directory",
       type: "path",
-      default: join("G:", "Desktop"),
+      // A folder in the user's home: exists everywhere, belongs to them, and is
+      // never a cloud-synced or system directory.
+      default: join(homedir(), "Projects"),
       description: "Where `dev project new` and the New project dialog create directories.",
       scope: "global",
       active: true,
@@ -611,6 +614,15 @@ export const CONFIG_SCHEMA = {
       description: "Branches DEV may not commit to without your approval.",
       scope: "project",
     }),
+    isolation: field<(typeof ISOLATION_MODES)[number]>({
+      label: "Where a task runs",
+      type: "enum",
+      values: ISOLATION_MODES,
+      default: "in-place",
+      description: "in-place runs the worker in your checkout. worktree gives each run its own git worktree on a branch named dev/<task>, commits what changed there, and leaves your checkout untouched — the safe setting for autopilot.",
+      scope: "project",
+      active: true,
+    }),
   },
 
   context: {
@@ -799,8 +811,10 @@ export const CONFIG_SCHEMA = {
     args: field<string[]>({
       label: "Nexus arguments",
       type: "string[]",
-      default: ["G:\\Desktop\\nexus\\src\\mcp-server.ts"],
-      description: "Arguments passed to the Nexus command.",
+      // Empty on purpose: Nexus is a separate, optional tool, and its location is
+      // this machine's business. Doctor says so plainly until it is pointed at one.
+      default: [],
+      description: "Arguments passed to the Nexus command, e.g. the path to Nexus's mcp-server. Empty means Nexus is not set up here.",
       active: true,
       restartRequired: true,
     }),
@@ -817,7 +831,7 @@ export const CONFIG_SCHEMA = {
     files: field<string[]>({
       label: "Secret files",
       type: "path[]",
-      default: ["G:\\Desktop\\nexus\\secrets.env", join(homedir(), ".dev", "keys.env")],
+      default: [join(homedir(), ".dev", "keys.env")],
       description: "Dotenv files loaded at startup. Keys stay in these files; DEV never copies them into the repository.",
       active: true,
       restartRequired: true,

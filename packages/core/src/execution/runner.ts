@@ -7,6 +7,7 @@ import { effortForTaskSize } from "../workers/efforts.ts";
 import * as gitOps from "../git.ts";
 import type { Execution, Task, TaskFailure, WorkerType } from "../schemas.ts";
 import { runVerification } from "../verification.ts";
+import { resolveConfigFor } from "../config.ts";
 import { WorkerUnavailableError } from "../workers/registry.ts";
 import type { WorkerCapability } from "../workers/types.ts";
 
@@ -96,6 +97,35 @@ export async function runTask(dev: Dev, taskId: string, options: RunOptions = {}
   writeFileSync(logPath, `# DEV execution ${execution.id}\n# task ${task.id}: ${task.title}\n# worker ${worker.id}\n# started ${execution.startedAt}\n\n`);
   dev.events.emit("TASK_STARTED", { projectId: project.id, taskId: task.id, executionId: execution.id, data: { workerId: worker.id, title: task.title } });
 
+  // ----- where the run happens -----
+  // In-place is the default: the worker edits the user's checkout. With
+  // isolation=worktree each run gets its own git worktree on a fresh branch, so a
+  // worker can never leave the checkout half-changed; what it did is committed on
+  // that branch for the user to merge or discard. Only a repository can be
+  // isolated; anything else falls back to in-place and says so in the log.
+  const isolation = resolveConfigFor({ home: dev.home, projectDir: projectPath }).config.git.isolation;
+  let runCwd = projectPath;
+  let worktree: { path: string; branch: string } | null = null;
+  if (isolation === "worktree") {
+    if (await gitOps.isRepo(projectPath)) {
+      const branch = `dev/${task.id}`;
+      const path = join(dev.home, "worktrees", `${task.id}-${execution.id}`);
+      mkdirSync(join(dev.home, "worktrees"), { recursive: true });
+      await gitOps.worktreeAdd(projectPath, path, branch);
+      worktree = { path, branch };
+      runCwd = path;
+      dev.db.run("UPDATE executions SET cwd = ? WHERE id = ?", runCwd, execution.id);
+      dev.events.emit("WORKTREE_CREATED", { projectId: project.id, taskId: task.id, executionId: execution.id, data: { path, branch } });
+      appendFileSync(logPath, `# isolation: worktree ${path} on branch ${branch}
+
+`);
+    } else {
+      appendFileSync(logPath, `# isolation: worktree requested but ${projectPath} is not a git repository; running in place
+
+`);
+    }
+  }
+
   const controller = new AbortController();
   options.signal?.addEventListener("abort", () => controller.abort(), { once: true });
   const cancelPoll = setInterval(() => {
@@ -116,7 +146,7 @@ export async function runTask(dev: Dev, taskId: string, options: RunOptions = {}
 
   try {
     // ----- git snapshot before -----
-    const before = await gitOps.snapshot(projectPath);
+    const before = await gitOps.snapshot(runCwd);
 
     // ----- context -----
     let prompt = "";
@@ -143,7 +173,7 @@ export async function runTask(dev: Dev, taskId: string, options: RunOptions = {}
     dev.events.emit("COMMAND_STARTED", { projectId: project.id, taskId: task.id, executionId: execution.id, data: { workerId: worker.id, command: current.command ?? worker.id, timeoutMs } });
     const result = await worker.run({
       taskId: task.id,
-      cwd: projectPath,
+      cwd: runCwd,
       prompt,
       command: current.command,
       effort: current.effort,
@@ -161,7 +191,7 @@ export async function runTask(dev: Dev, taskId: string, options: RunOptions = {}
     // ----- changed files -----
     let changedFiles: string[] = [];
     if (before.isRepo) {
-      changedFiles = await gitOps.changedFilesSince(projectPath, before.files);
+      changedFiles = await gitOps.changedFilesSince(runCwd, before.files);
       for (const file of changedFiles.slice(0, 50)) dev.events.emit("FILE_CHANGED", { projectId: project.id, taskId: task.id, executionId: execution.id, data: { path: file } });
       if (changedFiles.length > 50) dev.events.emit("FILE_CHANGED", { projectId: project.id, taskId: task.id, executionId: execution.id, data: { count: changedFiles.length, note: "only the first 50 listed individually" } });
     }
@@ -169,7 +199,7 @@ export async function runTask(dev: Dev, taskId: string, options: RunOptions = {}
     // ----- artifacts: log, diff, report -----
     const logArtifact = dev.artifacts.add({ projectId: project.id, taskId: task.id, executionId: execution.id, kind: "log", name: `${execution.id}.log`, path: logPath, meta: { workerId: worker.id } });
     if (changedFiles.length > 0 && before.isRepo) {
-      const diffText = await gitOps.diff(projectPath);
+      const diffText = await gitOps.diff(runCwd);
       if (diffText.trim()) {
         const diffPath = join(logsDir, `${execution.id}.diff`);
         writeFileSync(diffPath, diffText);
@@ -242,7 +272,7 @@ export async function runTask(dev: Dev, taskId: string, options: RunOptions = {}
     let verificationFailed: string | null = null;
     for (const spec of specs) {
       dev.events.emit("VERIFICATION_STARTED", { projectId: project.id, taskId: task.id, executionId: execution.id, data: { kind: spec.kind, label: spec.label ?? spec.command ?? spec.path ?? null } });
-      const outcome = await runVerification(spec, projectPath, { signal: controller.signal, onOutput: (chunk) => onOutput(chunk, "stdout") });
+      const outcome = await runVerification(spec, runCwd, { signal: controller.signal, onOutput: (chunk) => onOutput(chunk, "stdout") });
       if (outcome.manual) {
         needsReview = true;
         dev.events.emit("REVIEW_REQUESTED", { projectId: project.id, taskId: task.id, executionId: execution.id, data: { reason: outcome.label } });
@@ -270,7 +300,22 @@ export async function runTask(dev: Dev, taskId: string, options: RunOptions = {}
     }
 
     // ----- success -----
-    const summary = await concise(dev, result.summary, changedFiles);
+    let summary = await concise(dev, result.summary, changedFiles);
+    if (worktree) {
+      // The checkout never saw this work; the branch is where it lives now.
+      if (changedFiles.length > 0) {
+        const message = `${current.title}
+
+DEV task ${task.id}, execution ${execution.id}.`;
+        const made = await gitOps.commit(worktree.path, message, { all: true });
+        dev.events.emit("WORKTREE_COMMITTED", { projectId: project.id, taskId: task.id, executionId: execution.id, data: { branch: worktree.branch, hash: made.hash, files: changedFiles.length } });
+        dev.events.emit("GIT_COMMIT", { projectId: project.id, taskId: task.id, executionId: execution.id, data: { hash: made.hash, subject: made.subject, branch: worktree.branch } });
+        summary = `${summary}
+
+Committed on branch ${worktree.branch} (${made.hash.slice(0, 7)}); your checkout is unchanged.`;
+      }
+      await gitOps.worktreeRemove(projectPath, worktree.path, true).catch(() => undefined);
+    }
     const finished = dev.executions.finish(execution.id, { status: "succeeded", exitCode: result.exitCode, changedFiles, summary, command: result.commandLine, usage: result.usage });
     if (needsReview) {
       dev.tasks.setStatus(task.id, "REVIEW", { reason: "review required", resultSummary: summary });
@@ -285,7 +330,7 @@ export async function runTask(dev: Dev, taskId: string, options: RunOptions = {}
     return finish(dev, task, execution, { status: "failed", exitCode: null, error: message, changedFiles: [], summary: message, commandLine: null, usage: null }, {
       kind: "process-failed",
       reason: message,
-      nextAction: `Inspect the log (dev task log ${task.id}) and retry`,
+      nextAction: worktree ? `Inspect the log (dev task log ${task.id}) and the worktree at ${worktree.path}, then retry` : `Inspect the log (dev task log ${task.id}) and retry`,
     });
   } finally {
     clearInterval(cancelPoll);

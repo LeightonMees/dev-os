@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 
 import type { ArtifactContent } from "../lib/api.ts";
+import { ModelViewer } from "./ModelViewer.tsx";
 
 /**
  * Artifact output rendered as what it actually is. The bytes come from a
@@ -30,15 +31,16 @@ export function ArtifactPreview({ head, rawUrl, draft }: { head: ArtifactContent
   if (media.form === "markdown") {
     return <Markdown text={source} />;
   }
+  if (media.form === "model") {
+    return <ModelViewer url={rawUrl} name={artifact.name} />;
+  }
   if (media.form === "binary") {
     return (
       <div className="view-body">
         <div className="empty">
           <b>{artifact.name} is not something DEV can draw yet.</b>
           <br />
-          {artifact.path.toLowerCase().endsWith(".glb") || artifact.path.toLowerCase().endsWith(".gltf")
-            ? "3D meshes are stored and served, but there is no viewport for them in this build."
-            : `Served as ${media.type}.`}
+          Served as {media.type}.
           <br />
           Reveal it to open the file in its own application.
         </div>

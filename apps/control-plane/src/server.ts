@@ -5,6 +5,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import {
   applyPlan,
   artifactLanguage,
+  resolveConfigFor,
   artifactMedia,
   assembleContext,
   autoRun,
@@ -196,8 +197,20 @@ export function createControlPlane(dev: Dev, options: { version: string }): { se
   });
   add("POST", "/api/projects/:id/git/commit", async (req) => {
     const p = repoProject(req.params.id as string);
-    const commit = await git.commit(p.path, str(req.body, "message", true) as string, { all: req.body.all !== false, paths: strings(req.body, "paths") });
-    dev.events.emit("GIT_COMMIT", { projectId: p.id, taskId: str(req.body, "taskId") ?? null, data: { hash: commit.hash, subject: commit.subject } });
+    const message = str(req.body, "message", true) as string;
+    const taskId = str(req.body, "taskId") ?? null;
+    // A commit is the moment work becomes history. When the project asks for
+    // approval, the request is filed instead of the commit, and approving it is
+    // what performs the commit (see /api/approvals/:id/resolve). Nothing is
+    // half-done in between: either the approval exists or the commit does.
+    const gate = resolveConfigFor({ home: dev.home, projectDir: p.path }).config.approvals.requireForCommit;
+    if (gate) {
+      const approval = dev.approvals.request({ projectId: p.id, taskId, action: "git.commit", reason: message });
+      req.res.statusCode = 202;
+      return { approvalRequired: true, approval };
+    }
+    const commit = await git.commit(p.path, message, { all: req.body.all !== false, paths: strings(req.body, "paths") });
+    dev.events.emit("GIT_COMMIT", { projectId: p.id, taskId, data: { hash: commit.hash, subject: commit.subject } });
     return commit;
   });
   add("GET", "/api/projects/:id/decisions", (req) => dev.decisions.list(project(req.params.id as string).id));
@@ -610,8 +623,17 @@ export function createControlPlane(dev: Dev, options: { version: string }): { se
     const health = await dev.workers.check(req.params.id as string);
     return { ...dev.workers.info(req.params.id as string), health };
   });
-  add("GET", "/api/resources/status", async () => dev.nexus.status());
-  add("GET", "/api/resources/workflows", async () => dev.nexus.listWorkflows());
+  // Nexus is optional. When it is absent or down that is "service unavailable",
+  // not a fault in the control plane, and the browser console should say so.
+  const viaNexus = async <T,>(fn: () => Promise<T>): Promise<T> => {
+    try {
+      return await fn();
+    } catch (error) {
+      throw new HttpError(503, (error as Error).message);
+    }
+  };
+  add("GET", "/api/resources/status", () => viaNexus(() => dev.nexus.status()));
+  add("GET", "/api/resources/workflows", () => viaNexus(() => dev.nexus.listWorkflows()));
 
   // ----- flows: executable agent workflows -----
   // A flow is stored as the graph the user drew and run from that same graph, so the canvas and the
@@ -726,13 +748,23 @@ export function createControlPlane(dev: Dev, options: { version: string }): { se
   add("GET", "/api/resources/search", async (req) => {
     const q = req.query.get("q");
     if (!q) throw new HttpError(400, "q is required");
-    return dev.nexus.findCapability(q, num(req.query.get("limit"), 8));
+    return viaNexus(() => dev.nexus.findCapability(q, num(req.query.get("limit"), 8)));
   });
   add("GET", "/api/approvals", (req) => dev.approvals.list({ status: (req.query.get("status") as "pending" | "approved" | "denied" | null) ?? undefined }));
-  add("POST", "/api/approvals/:id/resolve", (req) => {
+  add("POST", "/api/approvals/:id/resolve", async (req) => {
     const status = str(req.body, "status", true);
     if (status !== "approved" && status !== "denied") throw new HttpError(400, "status must be approved or denied");
-    return dev.approvals.resolve(req.params.id as string, status, str(req.body, "by") ?? "user", str(req.body, "note") ?? null);
+    const pending = dev.approvals.get(req.params.id as string);
+    if (!pending) throw new HttpError(404, "Unknown approval");
+    const resolved = dev.approvals.resolve(pending.id, status, str(req.body, "by") ?? "user", str(req.body, "note") ?? null);
+    // Some approvals carry the action itself: approving a gated commit commits.
+    if (status === "approved" && pending.action === "git.commit" && pending.projectId) {
+      const p = repoProject(pending.projectId);
+      const commit = await git.commit(p.path, pending.reason, { all: true });
+      dev.events.emit("GIT_COMMIT", { projectId: p.id, taskId: pending.taskId, data: { hash: commit.hash, subject: commit.subject, approvalId: pending.id } });
+      return { ...resolved, performed: { commit } };
+    }
+    return resolved;
   });
   add("GET", "/api/artifacts", (req) => dev.artifacts.list({ projectId: req.query.get("projectId") ?? undefined, taskId: req.query.get("taskId") ?? undefined, limit: num(req.query.get("limit"), 200) }));
   const artifactFile = (id: string) => {
@@ -851,7 +883,8 @@ export function createControlPlane(dev: Dev, options: { version: string }): { se
       const result = await route.handler({ method: raw.method ?? "GET", params, query: url.searchParams, body, raw, res });
       // A handler that served the response itself (raw artifact bytes) has
       // already written headers; there is nothing left to encode as JSON.
-      if (!res.headersSent) sendJson(res, 200, result ?? {});
+      // A handler may have chosen a status (202 for "filed, not performed"); 200 otherwise.
+      if (!res.headersSent) sendJson(res, res.statusCode === 200 ? 200 : res.statusCode, result ?? {});
     } catch (error) {
       const status = error instanceof HttpError ? error.status : 500;
       if (res.headersSent) res.end();

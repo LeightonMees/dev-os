@@ -100,7 +100,15 @@ export class NexusClient {
     return this.#withSession((session) => session.callTool("get_skill", { name }));
   }
 
+  /** True when something points at a Nexus server, so there is something to start. */
+  get configured(): boolean {
+    return this.#options.args.length > 0 || (this.#options.command !== "node" && this.#options.command !== "");
+  }
+
   async #withSession<T>(fn: (session: McpSession) => Promise<T>): Promise<T> {
+    // Spawning bare `node` with no script would sit waiting on stdin, or exit with
+    // nothing said; neither tells the user what to do.
+    if (!this.configured) throw new Error("Nexus is not set up on this machine: set nexus.args to the path of Nexus's mcp-server (dev config set nexus.args <path>), or set nexus.enabled false");
     const session = new McpSession(this.#options);
     try {
       await session.initialize();

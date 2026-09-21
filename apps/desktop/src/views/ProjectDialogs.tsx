@@ -34,7 +34,7 @@ export function AddProjectDialog({ onClose, onAdded }: { onClose: () => void; on
     >
       <div className="field">
         <span className="label">Directory</span>
-        <input className="input mono" autoFocus value={path} onChange={(e) => setPath(e.target.value)} placeholder="G:\Desktop\my-project" onKeyDown={(e) => e.key === "Enter" && submit()} />
+        <input className="input mono" autoFocus value={path} onChange={(e) => setPath(e.target.value)} placeholder="C:\Projects\my-project" onKeyDown={(e) => e.key === "Enter" && submit()} />
         <span className="hint">An existing directory. A git repository is recommended but not required.</span>
       </div>
       <div className="field-row">

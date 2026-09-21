@@ -38,7 +38,6 @@ const EXCLUDE = new Set([
   // --- local state and secrets ---
   ".env",
   ".dev-home",
-  "DesktopDEV.dev-home",
   ".playwright-mcp",
   // --- build output and dependencies ---
   "node_modules",
@@ -67,6 +66,9 @@ const FORBIDDEN_CONTENT = [
   { label: "an AWS access key id", re: /\bAKIA[0-9A-Z]{16}\b/ },
   { label: "a private key block", re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
   { label: "the author's home directory", re: /C:\\Users\\user\b/ },
+  // The maintainer's projects disk. A default that points here works on one
+  // machine in the world and fails silently everywhere else.
+  { label: "a hard-coded G:\\Desktop path", re: /G:\\\\?Desktop|G:\/Desktop/ },
   // A bare mention of OneDrive is fine (DEV refuses to create projects in one).
   // A OneDrive *path* belongs to whoever built the release.
   { label: "a personal OneDrive path", re: /OneDrive - |[A-Za-z]:\\[^\n"']*OneDrive/ },
@@ -135,9 +137,10 @@ for (const entry of readdirSync(ROOT, { withFileTypes: true })) {
     filter: (src) => {
       const rel = relative(ROOT, src).split(sep).join("/");
       if (rel === "") return true;
-      if (EXCLUDE.has(rel) || EXCLUDE.has(basename(src))) return false;
+      if (EXCLUDE.has(rel) || EXCLUDE.has(basename(src)) || basename(src).endsWith(".dev-home")) return false;
       // Nested build output and local state, wherever it appears.
-      if (/(^|\/)(node_modules|dist|target|\.dev-home)(\/|$)/.test(rel)) return false;
+      // Any DEV home, including one with a mangled name, is local state.
+      if (/(^|\/)(node_modules|dist|target|[^/]*\.dev-home)(\/|$)/.test(rel)) return false;
       if (/(^|\/)\.env(\.|$)/.test(rel) && !rel.endsWith(".env.example")) return false;
       if (statSync(src).isFile()) copied += 1;
       return true;

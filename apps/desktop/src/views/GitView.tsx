@@ -62,11 +62,17 @@ export function GitView() {
 
   const commit = async () => {
     if (!message.trim()) return;
-    const ok = await act(() => api.gitCommit(currentProject.id, message.trim()), "Committed");
-    if (ok) {
-      setMessage("");
-      await load();
+    const result = await act(() => api.gitCommit(currentProject.id, message.trim()));
+    if (!result) return;
+    if ("approvalRequired" in result) {
+      // Nothing was committed: the project asks for a decision first. Approving
+      // it in the Attention panel performs the commit with this same message.
+      toast("info", "Commit filed for your approval — approve it in Attention to commit");
+    } else {
+      toast("success", `Committed ${result.short}`);
     }
+    setMessage("");
+    await load();
   };
   const untrackedSelected = path && status?.changes.find((c) => c.path === path)?.status === "??";
 

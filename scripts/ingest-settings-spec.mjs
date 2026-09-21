@@ -1,12 +1,15 @@
 // Ingest the "Configuration, Onboarding & Operating-Policy" specification into
 // DEV's own backlog as milestones, epics and tickets with dependencies.
 // Idempotent: skips titles that already exist in the DEV project.
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { openDev } from "../packages/core/src/index.ts";
 
-const home = process.env.DEV_HOME ?? "G:/Desktop/DEV/.dev-home";
+const home = process.env.DEV_HOME ?? resolve(fileURLToPath(import.meta.url), "..", "..", ".dev-home");
 const dev = openDev({ home });
 const project = dev.projects.resolve("DEV");
-if (!project) throw new Error("Register DEV first: dev project add G:\\Desktop\\DEV --name DEV");
+if (!project) throw new Error("Register DEV first: dev project add <path-to-this-repo> --name DEV");
 
 const existing = new Map(dev.tasks.list({ projectId: project.id }).map((t) => [t.title, t]));
 const ids = new Map();

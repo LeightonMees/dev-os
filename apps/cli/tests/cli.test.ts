@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
 
+const nodeExe = process.execPath.includes(" ") ? `"${process.execPath}"` : process.execPath;
+
 import { parseArgs, flagList, flagString } from "../src/args.ts";
 
 const BIN = resolve(import.meta.dirname, "..", "bin", "dev.mjs");
@@ -87,6 +89,36 @@ test("project → task → run → show works through the CLI with --json and sh
     const events = JSON.parse(dev(home, ["events", "--project", added.id, "--json"]).out) as { type: string }[];
     assert.ok(events.some((e) => e.type === "TASK_COMPLETED"));
     assert.match(dev(home, ["task", "context", task.id, "--project", added.id]).out, /Context preview/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test("artifacts are listable project-wide and inspectable by id", () => {
+  const home = tempRoot();
+  const repo = tempRoot();
+  try {
+    execFileSync("git", ["init", "-q", "-b", "main"], { cwd: repo });
+    writeFileSync(join(repo, "README.md"), "# t\n");
+    const project = JSON.parse(dev(home, ["project", "add", repo, "--name", "arts", "--json"]).out) as { id: string };
+    const task = JSON.parse(dev(home, ["task", "add", "say hi", "--project", project.id, "--command", `${nodeExe} -e "console.log('hi')"`, "--json"]).out) as { id: string };
+    dev(home, ["task", "run", task.id, "--project", project.id]);
+
+    const listed = JSON.parse(dev(home, ["artifacts", "--project", project.id, "--json"]).out) as { id: string; kind: string; taskId: string }[];
+    assert.ok(listed.some((a) => a.kind === "log"), "a run always leaves a log artifact");
+    assert.ok(listed.every((a) => a.taskId === task.id));
+
+    const logs = JSON.parse(dev(home, ["artifacts", "--project", project.id, "--kind", "log", "--json"]).out) as { kind: string }[];
+    assert.ok(logs.length >= 1 && logs.every((a) => a.kind === "log"), "--kind filters");
+
+    const shown = dev(home, ["artifacts", "show", listed[0]!.id]).out;
+    assert.match(shown, /path/);
+    assert.match(shown, new RegExp(listed[0]!.id));
+
+    const human = dev(home, ["artifacts", "--project", project.id]).out;
+    assert.match(human, /KIND/);
+    assert.match(human, /say hi/);
   } finally {
     rmSync(home, { recursive: true, force: true });
     rmSync(repo, { recursive: true, force: true });

@@ -40,7 +40,7 @@ Two first-class interfaces over one core:
 
 - **`dev`** — a CLI that is enough on its own.
 - **DEV desktop** — a Tauri + React workbench: board, list and dependency-graph views, an inspector,
-  live output, a real terminal, git, a flow editor, and an artifact zone.
+  live output, a real terminal, git, a flow editor, and an artifact zone with a 3D viewport.
 
 Both talk to the same control plane and the same database, so anything created in one appears in the
 other immediately.
@@ -60,6 +60,8 @@ other immediately.
 | **Work** — every task by status. Drag between the columns the state machine allows; the rest explain why they refuse. | **Graph** — columns are dependency depth, so work reads left to right. |
 | ![Workers and their health](docs/screenshots/workers.png) | ![The artifact zone](docs/screenshots/artifacts.png) |
 | **Workers** — 16 of them, which are healthy, and the real reason the rest are not. | **Artifacts** — every file a run produced, rendered in place and editable. |
+| ![A GLB mesh in the 3D viewport](docs/screenshots/model.png) | |
+| **3D viewport** — GLB/GLTF artifacts drawn as meshes: orbit, zoom, pan, with counts read from the loaded scene. | |
 
 ## What makes it different
 

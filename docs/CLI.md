@@ -28,6 +28,8 @@ dev workers | dev worker doctor [id]
 dev resources search "<need>" | dev resources status
 
 dev events [--follow] [--task <id>] [--type A,B]
+dev artifacts [<taskId>] [--kind diff|log|report|test-result] [--json]   files runs produced
+dev artifacts show <id>                                                path, size, task, version
 dev git status | diff [--stat] | log | branch [name] | commit "<msg>" [--task <id>]
 dev decision list | add "<title>" --reason .. --tags a,b
 dev approvals [approve|deny <id>]

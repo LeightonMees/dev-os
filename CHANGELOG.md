@@ -6,6 +6,27 @@ All notable changes to DEV are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Worktree isolation** (`git.isolation: worktree`, per project or global). Each run gets its own git
+  worktree on a branch named `dev/<task>`; what changed is committed there and the worktree removed,
+  so a worker can never leave your checkout half-edited. The safe setting for autopilot. Plain
+  directories fall back to running in place and say so in the log.
+- `dev artifacts` lists every file runs produced, filterable by task and kind; `dev artifacts show <id>`
+  gives the path and details.
+- **Approval gate on commits** (`approvals.requireForCommit`). Commit in the Git view files an approval
+  instead of committing; approving it performs the commit with that message, denying it drops it.
+  Nothing is half-done in between.
+- **A 3D viewport for GLB/GLTF artifacts**: orbit, zoom and pan, framed to the model's bounds, with mesh
+  and triangle counts read from the loaded scene. Where WebGL is missing it says so instead of showing
+  a black box.
+
+### Fixed
+- The default Nexus configuration pointed at a path on the maintainer's machine. It is now empty, and
+  DEV says "Nexus is not set up on this machine" with the exact setting to change, instead of
+  spawning `node` with no script and reporting "Nexus exited (0)".
+- Nexus-backed endpoints answer 503 rather than 500 when Nexus is absent: unavailable, not broken.
+- Path placeholders in the project dialogs no longer show the maintainer's drive.
+
 ## [0.1.0] - 2026-09-21
 
 First public release. Version numbers start at 0.1.0 to say what the software is: used daily,

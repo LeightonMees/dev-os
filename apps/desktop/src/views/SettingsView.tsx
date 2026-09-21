@@ -49,9 +49,10 @@ const GROUPS: { title: string; fields: Field[] }[] = [
   {
     title: "Planning & approvals",
     fields: [
+      { key: "git.isolation", label: "Where a task runs", type: "select", options: ["in-place", "worktree"], hint: "in-place: the worker edits your checkout. worktree: every run gets its own git worktree on a branch named dev/<task>; what changed is committed there and your checkout is never touched. The safe setting for autopilot. Per project via .dev/config.json." },
       { key: "planning.maxTasks", label: "Max tasks per plan", type: "number" },
       { key: "planning.worker", label: "Planning worker", type: "worker", hint: "null = first healthy planner in preference order" },
-      { key: "approvals.requireForCommit", label: "Require approval for commits", type: "boolean" },
+      { key: "approvals.requireForCommit", label: "Require approval for commits", type: "boolean", hint: "When on, Commit in the Git view files an approval instead of committing. Approving it performs the commit; denying it drops the request." },
     ],
   },
   {
