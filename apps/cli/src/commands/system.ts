@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { doctor, git, setConfigValue, type DoctorCheck, seedGettingStarted } from "@dev/core";
+import { configFieldFor, doctor, git, setConfigValue, type DoctorCheck, seedGettingStarted } from "@dev/core";
 
 import { ControlPlaneClient } from "../api.ts";
 import { flagBool, flagNumber, flagString, UsageError } from "../args.ts";
@@ -275,7 +275,7 @@ export async function configCommand(ctx: CliContext, sub: string | undefined, re
     if (!key || valueParts.length === 0) throw new UsageError("Usage: dev config set <dotted.key> <value>");
     const config = setConfigValue(ctx.home, key, valueParts.join(" "));
     if (ctx.json) printJson(config);
-    else println(`${c.green("✓")} ${key} = ${JSON.stringify(valueParts.join(" "))}  ${c.dim(`(${file}; restart the control plane to apply worker/nexus changes)`)}`);
+    else println(`${c.green("✓")} ${key} = ${JSON.stringify(valueParts.join(" "))}  ${c.dim(`(${file}; ${configFieldFor(key)?.restartRequired ? "restart the control plane for this setting to apply" : "applies to the next run"})`)}`);
     return 0;
   }
   if (sub === "init") {

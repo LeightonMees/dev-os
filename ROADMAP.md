@@ -9,11 +9,10 @@ Kept deliberately small. Long-term ideas live here as one line each, not as tick
 
 ## NEXT
 
-- Approval gates on a project-defined list of consequential commands (deploys, migrations); commits and pushes are gated today.
+- Concurrency beyond one worker per repository (`dev auto --all` runs projects in turn today; worktree isolation makes parallel runs safe to attempt).
+- Direct manipulation on the artifact canvas: select and edit elements inside an artboard, not just its source.
 
 ## LATER
 
 - Design bridge: pull Figma frames and Modly meshes in as artifacts through Nexus, and push edits back (the GLB viewport is in place; the bridge waits on Nexus stdio working from DEV).
-- Direct manipulation on the artifact canvas: select and edit elements inside an artboard, not just its source.
 - Screenshot/browser verification kind through the Nexus playwright server.
-- Concurrency beyond one worker per repository (`dev auto --all` runs projects in turn today).

@@ -5,6 +5,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import {
   applyPlan,
   artifactLanguage,
+  configFieldFor,
   resolveConfigFor,
   artifactMedia,
   assembleContext,
@@ -150,7 +151,10 @@ export function createControlPlane(dev: Dev, options: { version: string }): { se
   add("PATCH", "/api/config", (req) => {
     const key = str(req.body, "key", true) as string;
     const value = str(req.body, "value", true) as string;
-    return { config: setConfigValue(dev.home, key, value), note: "restart the control plane for worker/nexus settings to apply" };
+    // Only some settings are read at start-up; saying "restart" for the rest
+    // sends people restarting for nothing.
+    const restart = configFieldFor(key)?.restartRequired === true;
+    return { config: setConfigValue(dev.home, key, value), note: restart ? "restart the control plane for this setting to apply" : "applies to the next run" };
   });
 
   // ----- projects -----
