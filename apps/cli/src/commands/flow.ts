@@ -1,6 +1,9 @@
-import { runFlow, type Flow } from "@dev/core";
+import { readFileSync } from "node:fs";
+import { basename } from "node:path";
 
-import { flagBool, UsageError } from "../args.ts";
+import { runFlow, validateFlow, type Flow } from "@dev/core";
+
+import { flagBool, flagString, UsageError } from "../args.ts";
 import { currentProject, type CliContext } from "../context.ts";
 import { ago, c, kv, printJson, println, SYMBOL, table, truncate } from "../output.ts";
 
@@ -9,6 +12,8 @@ const USAGE = [
   "dev flow show <id|name>            steps, arrows, problems and recent runs",
   "dev flow run <id|name>             run it now, printing each step as it finishes",
   "dev flow runs <id|name>            run history",
+  "dev flow export <id|name>          the flow as JSON, fit for a repository",
+  "dev flow import <file.json>        a flow from JSON into the current project",
 ].join("\n");
 
 /**
@@ -40,9 +45,45 @@ export async function flowCommand(ctx: CliContext, sub: string | undefined, rest
     return 0;
   }
 
+  if (sub === "import") {
+    // A flow file is the flow's own content and nothing about where it came
+    // from: no ids, no project. Importing it here makes it this project's.
+    const file = rest[0];
+    if (!file) throw new UsageError("Usage: dev flow import <file.json> [--name <name>] --project <id|name>");
+    const project = currentProject(ctx, { required: true });
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(readFileSync(file, "utf8"));
+    } catch (error) {
+      throw new UsageError(`${file} is not a flow file: ${(error as Error).message}`);
+    }
+    const shape = parsed as Partial<{ name: string; description: string; nodes: Flow["nodes"]; edges: Flow["edges"] }>;
+    if (!shape || typeof shape !== "object" || !Array.isArray(shape.nodes) || !Array.isArray(shape.edges)) throw new UsageError(`${file} does not contain a flow (expected name, nodes[], edges[])`);
+    const name = flagString(ctx.flags, "name") ?? shape.name ?? basename(file, ".json");
+    const problems = validateFlow({ nodes: shape.nodes, edges: shape.edges });
+    const created = ctx.dev.flows.create({ projectId: project!.id, name, description: shape.description ?? "", nodes: shape.nodes, edges: shape.edges });
+    if (ctx.json) {
+      printJson({ ...created, problems });
+      return 0;
+    }
+    println(c.green(`Imported "${created.name}" (${created.nodes.length} steps) as ${created.id} into ${project!.name}`));
+    if (problems.length > 0) {
+      println(c.yellow("  It cannot run yet:"));
+      for (const p of problems) println(`    ${SYMBOL.warn} ${p.message}`);
+    }
+    return 0;
+  }
+
   const target = rest[0];
   if (!target) throw new UsageError(USAGE);
   const flow = resolveFlow(ctx, target);
+
+  if (sub === "export") {
+    // Stable field order and no ids, so the file diffs cleanly in a repository.
+    const portable = { name: flow.name, description: flow.description ?? "", nodes: flow.nodes, edges: flow.edges };
+    println(JSON.stringify(portable, null, 2));
+    return 0;
+  }
 
   if (sub === "show") {
     const problems = ctx.dev.flows.problems(flow.id);

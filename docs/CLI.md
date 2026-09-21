@@ -31,6 +31,7 @@ dev events [--follow] [--task <id>] [--type A,B]
 dev artifacts [<taskId>] [--kind diff|log|report|test-result] [--json]   files runs produced
 dev artifacts show <id>                                                path, size, task, version
 dev flow list | show <id|name> | run <id|name> | runs <id|name>        flows drawn in the app, run headless
+dev flow export <id|name> > flow.json | import flow.json [--name]      flows as files, fit for a repository
 dev git status | diff [--stat] | log | branch [name] | commit "<msg>" [--task <id>]
 dev decision list | add "<title>" --reason .. --tags a,b
 dev approvals [approve|deny <id>]

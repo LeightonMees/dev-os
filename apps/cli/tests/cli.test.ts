@@ -152,3 +152,40 @@ test("flows drawn in the app can be listed, inspected and run headless from the 
     rmSync(repo, { recursive: true, force: true });
   }
 });
+
+test("a flow exports to portable JSON and imports back into another project", () => {
+  const home = tempRoot();
+  const repo = tempRoot();
+  const other = tempRoot();
+  try {
+    for (const dir of [repo, other]) {
+      execFileSync("git", ["init", "-q", "-b", "main"], { cwd: dir });
+      writeFileSync(join(dir, "README.md"), "# t\n");
+    }
+    const a = JSON.parse(dev(home, ["project", "add", repo, "--name", "source", "--json"]).out) as { id: string };
+    const b = JSON.parse(dev(home, ["project", "add", other, "--name", "target", "--json"]).out) as { id: string };
+    const flowId = execFileSync(process.execPath, [resolve("apps/cli/tests/seed-flow.mjs"), home, a.id, `${nodeExe} -e "console.log('portable')"`], { encoding: "utf8" }).trim();
+
+    const exported = dev(home, ["flow", "export", flowId]).out;
+    const file = JSON.parse(exported) as { name: string; nodes: unknown[]; edges: unknown[]; id?: string; projectId?: string };
+    assert.equal(file.name, "greet");
+    assert.equal(file.nodes.length, 1);
+    assert.equal(file.id, undefined, "no ids in the file");
+    assert.equal(file.projectId, undefined, "no project in the file: it belongs wherever it is imported");
+    const path = join(home, "greet.flow.json");
+    writeFileSync(path, exported);
+
+    const imported = JSON.parse(dev(home, ["flow", "import", path, "--project", b.id, "--name", "greet-copy", "--json"]).out) as { id: string; name: string; projectId: string; problems: unknown[] };
+    assert.equal(imported.name, "greet-copy");
+    assert.equal(imported.projectId, b.id);
+    assert.deepEqual(imported.problems, []);
+    assert.notEqual(imported.id, flowId);
+    assert.match(dev(home, ["flow", "run", imported.id, "--project", b.id]).out, /greet-copy passed/);
+
+    // A file that is not a flow is refused with the reason, not stored.
+    writeFileSync(join(home, "junk.json"), JSON.stringify({ hello: 1 }));
+    assert.throws(() => dev(home, ["flow", "import", join(home, "junk.json"), "--project", b.id]), /does not contain a flow/);
+  } finally {
+    for (const dir of [home, repo, other]) rmSync(dir, { recursive: true, force: true });
+  }
+});

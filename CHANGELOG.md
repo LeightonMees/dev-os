@@ -20,7 +20,8 @@ All notable changes to DEV are recorded here. The format follows
   its runs here is tried before one a public benchmark merely recommends: success rate first, then
   speed, after at least three finished runs. The routing reason says so in plain words.
 - `dev flow list|show|run|runs` runs flows drawn in the app headless, printing each step as it
-  finishes, so a flow can live in a script or a scheduler.
+  finishes, so a flow can live in a script or a scheduler. `dev flow export` / `import` move a flow
+  as a JSON file with no ids in it, so flows can be kept in a repository and shared.
 - **Human steps in flows.** A `human` node asks the person a question; the run waits in Attention
   until they answer, and the answer is the step's output for later steps. Declining fails the step.
 - **A 3D viewport for GLB/GLTF artifacts**: orbit, zoom and pan, framed to the model's bounds, with mesh
