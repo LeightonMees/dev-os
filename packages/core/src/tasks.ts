@@ -367,7 +367,9 @@ export class TaskStore {
 
   /** READY tasks whose dependencies are all DONE: the ones DEV may execute now. */
   runnable(projectId?: string): Task[] {
-    return this.list({ projectId, status: "READY" }).filter((t) => this.unmetDependencies(t.id).length === 0);
+    // Unlimited: a project with more READY work than the default page would
+    // otherwise have tasks that never run and never say why.
+    return this.list({ projectId, status: "READY", limit: null }).filter((t) => this.unmetDependencies(t.id).length === 0);
   }
 
   /** Dependents of a finished task that are now unblocked move BACKLOG -> READY. */

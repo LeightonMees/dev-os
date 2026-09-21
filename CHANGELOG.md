@@ -16,6 +16,9 @@ All notable changes to DEV are recorded here. The format follows
 - **Approval gate on commits** (`approvals.requireForCommit`). Commit in the Git view files an approval
   instead of committing; approving it performs the commit with that message, denying it drops it.
   Nothing is half-done in between.
+- **Routing learns from this machine.** With no preference stated, a worker that has finished
+  its runs here is tried before one a public benchmark merely recommends: success rate first, then
+  speed, after at least three finished runs. The routing reason says so in plain words.
 - **A 3D viewport for GLB/GLTF artifacts**: orbit, zoom and pan, framed to the model's bounds, with mesh
   and triangle counts read from the loaded scene. Where WebGL is missing it says so instead of showing
   a black box.
@@ -26,6 +29,8 @@ All notable changes to DEV are recorded here. The format follows
   spawning `node` with no script and reporting "Nexus exited (0)".
 - Nexus-backed endpoints answer 503 rather than 500 when Nexus is absent: unavailable, not broken.
 - Path placeholders in the project dialogs no longer show the maintainer's drive.
+- `runnable()` no longer stops at the first 500 READY tasks; a large queue could leave work that never
+  ran and never said why.
 
 ## [0.1.0] - 2026-09-21
 

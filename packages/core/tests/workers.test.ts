@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { Db, EventBus, ExecutionStore, WorkerRegistry, WorkerUnavailableError, StreamJsonParser, DEFAULT_CONFIG, type DevConfig, type Worker, type Task } from "../src/index.ts";
 import { NO_EFFORT } from "../src/workers/efforts.ts";
+import { openTestDev } from "./helpers.ts";
 
 function fakeWorker(id: string, ok: boolean, capabilities: Worker["capabilities"] = ["code"]): Worker {
   return {
@@ -247,4 +248,47 @@ test("model and reasoning effort are separate dials, and each worker is given th
 
   // The task's size estimate is only the fallback for the dial, not the dial itself.
   assert.equal(effortForTaskSize("low"), "low");
+});
+
+test("routing: with no preference stated, a worker's record on this machine outranks the benchmark order", async () => {
+  const { dev, cleanup } = openTestDev();
+  try {
+    const project = dev.projects.add({ path: null, name: "record" });
+    const task = dev.tasks.create({ projectId: project.id, title: "t", status: "READY" });
+    // Two healthy workers with identical capabilities; only their history differs.
+    const steady = fakeWorker("steady", true);
+    const flaky = fakeWorker("flaky", true);
+    const record = (workerId: string, outcomes: ("succeeded" | "failed")[], ms: number) => {
+      for (const status of outcomes) {
+        const e = dev.executions.create({ taskId: task.id, projectId: project.id, workerId, cwd: "." });
+        dev.executions.finish(e.id, { status, exitCode: status === "succeeded" ? 0 : 1, changedFiles: [], summary: "", command: null, usage: null });
+        dev.db.run("UPDATE executions SET duration_ms = ? WHERE id = ?", ms, e.id);
+      }
+    };
+    record("flaky", ["succeeded", "failed", "failed", "succeeded"], 500);
+    record("steady", ["succeeded", "succeeded", "succeeded"], 900);
+
+    const config = structuredClone(DEFAULT_CONFIG);
+    config.workers.preferences = [];
+    config.workers.preferencesByCapability = {};
+    // Register flaky first so that hard-coded order would pick it if nothing else did.
+    const reg = new WorkerRegistry([flaky, steady], dev.db, dev.events, dev.executions, config);
+    const chosen = await reg.select(taskStub({ projectId: project.id }));
+    assert.equal(chosen.worker.id, "steady", "3 of 3 beats 2 of 4");
+    assert.match(chosen.reason, /on this machine it has finished 3 of 3 runs/);
+
+    // A stated preference still wins over any record.
+    config.workers.preferences = ["flaky"];
+    const preferred = await new WorkerRegistry([flaky, steady], dev.db, dev.events, dev.executions, config).select(taskStub({ projectId: project.id }));
+    assert.equal(preferred.worker.id, "flaky");
+
+    // Fewer than three finished runs is not a record: a one-hit wonder is not promoted.
+    const rookie = fakeWorker("rookie", true);
+    record("rookie", ["succeeded"], 10);
+    config.workers.preferences = [];
+    const withRookie = await new WorkerRegistry([rookie, steady], dev.db, dev.events, dev.executions, config).select(taskStub({ projectId: project.id }));
+    assert.equal(withRookie.worker.id, "steady");
+  } finally {
+    cleanup();
+  }
 });

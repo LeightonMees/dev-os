@@ -17,6 +17,5 @@ Kept deliberately small. Long-term ideas live here as one line each, not as tick
 
 - Design bridge: pull Figma frames and Modly meshes in as artifacts through Nexus, and push edits back (the GLB viewport is in place; the bridge waits on Nexus stdio working from DEV).
 - Direct manipulation on the artifact canvas: select and edit elements inside an artboard, not just its source.
-- Smarter worker routing from recorded execution outcomes.
 - Screenshot/browser verification kind through the Nexus playwright server.
 - Multiple projects in one auto-run; concurrency beyond one worker per repository.

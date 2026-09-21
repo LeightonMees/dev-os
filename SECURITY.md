@@ -51,6 +51,12 @@ Workers never receive your whole repository or your backlog. What they do receiv
 files it names, and bounded project context. If you enable a hosted provider, that content leaves
 your machine and is subject to that provider's terms. Local models via Ollama do not leave.
 
+## Known advisories
+
+- `glib` 0.18.x (moderate, RUSTSEC) is pulled in by Tauri 2's gtk bindings on **Linux only**. No
+  patched release is compatible with the gtk version Tauri 2 uses; it will clear when Tauri moves. It
+  does not affect the CLI or the control plane, or the Windows desktop app.
+
 ## Reporting a vulnerability
 
 Please report security issues privately rather than in a public issue:

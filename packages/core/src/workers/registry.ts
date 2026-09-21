@@ -197,8 +197,11 @@ export class WorkerRegistry {
     // consulted where the user has expressed no opinion, and an opinion always wins over it.
     const perCapability = this.#config.workers.preferencesByCapability?.[capability] ?? [];
     const stated = [options.projectDefault, ...perCapability, ...this.#config.workers.preferences].filter((x): x is string => !!x);
+    // What has actually happened on this machine outranks what a public benchmark
+    // says should happen, and both give way to a stated preference.
+    const recorded = stated.length > 0 ? [] : this.#recordedOrder(capability);
     const evidenceOrder = stated.length > 0 ? [] : this.#evidenceOrder(capability);
-    const order = [...new Set([...stated, ...evidenceOrder, ...this.all().filter((w) => w.capabilities.includes(capability)).map((w) => w.id)])];
+    const order = [...new Set([...stated, ...recorded.map((r) => r.id), ...evidenceOrder, ...this.all().filter((w) => w.capabilities.includes(capability)).map((w) => w.id)])];
     const tried: string[] = [];
     for (const id of order) {
       const worker = this.get(id);
@@ -217,14 +220,35 @@ export class WorkerRegistry {
               ? `your preferred worker for "${capability}"`
               : stated.includes(id)
                 ? `first healthy worker with "${capability}" in your preference order`
-                : evidenceOrder.includes(id)
-                  ? `no preference set; public benchmarks rank it first for "${capability}"`
-                  : `the only healthy worker left offering "${capability}"`;
+                : recorded.some((r) => r.id === id)
+                  ? `no preference set; on this machine it has finished ${recorded.find((r) => r.id === id)!.succeeded} of ${recorded.find((r) => r.id === id)!.runs} runs`
+                  : evidenceOrder.includes(id)
+                    ? `no preference set; public benchmarks rank it first for "${capability}"`
+                    : `the only healthy worker left offering "${capability}"`;
         return { worker, reason };
       }
       tried.push(`${id}: ${health.detail}`);
     }
     throw new WorkerUnavailableError("any", tried.length ? tried.join("; ") : `no registered worker offers "${capability}"`);
+  }
+
+  /**
+   * Workers that offer the capability, ordered by their record here: success
+   * rate first, then speed. A worker needs three finished runs before its record
+   * counts — one lucky run is not evidence — and a worker with no record is left
+   * to the benchmark step. Cancelled runs say nothing about the worker and are
+   * not counted against it (workerStats already excludes them).
+   */
+  #recordedOrder(capability: WorkerCapability): { id: string; runs: number; succeeded: number; rate: number; avgMs: number | null }[] {
+    const rows = this.all()
+      .filter((w) => w.capabilities.includes(capability) && w.type !== "shell")
+      .map((w) => {
+        const stats = this.#executions.workerStats(w.id);
+        const runs = stats.succeeded + stats.failed;
+        return { id: w.id, runs, succeeded: stats.succeeded, rate: runs > 0 ? stats.succeeded / runs : 0, avgMs: stats.avgDurationMs };
+      })
+      .filter((r) => r.runs >= 3);
+    return rows.sort((a, b) => b.rate - a.rate || (a.avgMs ?? Number.POSITIVE_INFINITY) - (b.avgMs ?? Number.POSITIVE_INFINITY));
   }
 
   /**
