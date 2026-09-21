@@ -495,6 +495,14 @@ export const CONFIG_SCHEMA = {
       active: true,
       restricted: "approvals.requireForCommit may only be turned on by a project, session or task",
     }),
+    gatedCommands: field<string[]>({
+      label: "Commands that wait for approval",
+      type: "string[]",
+      // The obvious ways a run reaches beyond the machine or destroys work.
+      default: ["git push", "npm publish", "docker push", "terraform apply", "kubectl apply", "rm -rf"],
+      description: "A shell task whose command contains one of these is filed for approval before it runs. Approve it in Attention to run it; deny it to block the task.",
+      active: true,
+    }),
     requireForPush: field<boolean>({
       label: "Require approval for pushes",
       type: "boolean",

@@ -53,6 +53,7 @@ const GROUPS: { title: string; fields: Field[] }[] = [
       { key: "planning.maxTasks", label: "Max tasks per plan", type: "number" },
       { key: "planning.worker", label: "Planning worker", type: "worker", hint: "null = first healthy planner in preference order" },
       { key: "approvals.requireForCommit", label: "Require approval for commits", type: "boolean", hint: "When on, Commit in the Git view files an approval instead of committing. Approving it performs the commit; denying it drops the request." },
+      { key: "approvals.gatedCommands", label: "Commands that wait for approval", hint: 'A shell task whose command contains one of these strings is filed in Attention before it runs — approve to run it as written, deny to block the task with your reason. JSON list, e.g. ["git push", "npm publish", "rm -rf"].' },
       { key: "approvals.requireForPush", label: "Require approval for pushes", type: "boolean", hint: "On by default: a push leaves this machine. Push files an approval; approving it performs the push. Only this global setting can turn it off — a project can demand it, never waive it." },
     ],
   },

@@ -347,3 +347,51 @@ test("worktree isolation on a plain directory falls back to running in place, an
     cleanup();
   }
 });
+
+test("a gated command waits for approval: denied blocks the task with the reason, approved runs it", async () => {
+  const { dev, cleanup } = openTestDev();
+  const repo = tempRepo();
+  try {
+    const project = dev.projects.add({ path: repo.path, name: "gated" });
+    mkdirSync(join(repo.path, ".dev"), { recursive: true });
+    writeFileSync(join(repo.path, ".dev", "config.json"), JSON.stringify({ approvals: { gatedCommands: ["publish-the-thing"] } }));
+    const task = dev.tasks.create({ projectId: project.id, title: "release", command: `${nodeExe} -e "console.log('publish-the-thing done'); require('fs').writeFileSync('published.txt','yes')"`, status: "READY" });
+
+    // Denied: nothing ran, and the task says who said no and why.
+    const denied = runTask(dev, task.id);
+    await new Promise((r) => setTimeout(r, 700));
+    let pending = dev.approvals.list({ status: "pending" });
+    assert.equal(pending.length, 1, "the run is waiting on one approval");
+    assert.equal(pending[0]!.action, "run-command");
+    assert.match(pending[0]!.reason, /publish-the-thing/);
+    dev.approvals.resolve(pending[0]!.id, "denied", "user", "not on a Friday");
+    const first = await denied;
+    assert.equal(first.status, "failed");
+    assert.ok(!existsSync(join(repo.path, "published.txt")), "the command never ran");
+    const blocked = dev.tasks.get(task.id)!;
+    assert.equal(blocked.status, "BLOCKED");
+    assert.equal(blocked.failure?.kind, "approval-denied");
+    assert.match(blocked.failure?.reason ?? "", /not on a Friday/);
+
+    // Approved on retry: the same command runs as written.
+    dev.tasks.retry(task.id);
+    const approved = runTask(dev, task.id);
+    await new Promise((r) => setTimeout(r, 700));
+    pending = dev.approvals.list({ status: "pending" });
+    assert.equal(pending.length, 1);
+    dev.approvals.resolve(pending[0]!.id, "approved", "user", null);
+    const second = await approved;
+    assert.equal(second.status, "succeeded");
+    assert.ok(existsSync(join(repo.path, "published.txt")));
+    assert.equal(dev.tasks.get(task.id)?.status, "DONE");
+
+    // A command that matches nothing on the list never waits.
+    const plain = dev.tasks.create({ projectId: project.id, title: "plain", command: `${nodeExe} -e "console.log('hi')"`, status: "READY" });
+    const quick = await runTask(dev, plain.id);
+    assert.equal(quick.status, "succeeded");
+    assert.equal(dev.approvals.list({ status: "pending" }).length, 0);
+  } finally {
+    repo.cleanup();
+    cleanup();
+  }
+});

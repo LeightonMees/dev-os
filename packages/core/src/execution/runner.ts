@@ -168,6 +168,37 @@ export async function runTask(dev: Dev, taskId: string, options: RunOptions = {}
       append(`# context: ${assembled.usedTokens}/${assembled.budgetTokens} tokens, sections: ${assembled.sections.filter((s) => s.included).map((s) => s.name).join(", ")}\n\n`);
     }
 
+    // ----- gate: commands that reach beyond the machine wait for a person -----
+    // Matching is on the command text, so an autopilot run that would push,
+    // publish or delete stops at the edge and asks. Denial blocks the task with
+    // the reason; approval lets this run continue exactly as written.
+    if (current.command) {
+      const gated = resolveConfigFor({ home: dev.home, projectDir: projectPath }).config.approvals.gatedCommands;
+      const hit = gated.find((pattern) => pattern.trim() && current.command!.includes(pattern.trim()));
+      if (hit) {
+        const approval = dev.approvals.request({ projectId: project.id, taskId: task.id, executionId: execution.id, action: "run-command", reason: `${task.title}: ${current.command}` });
+        append(`# waiting for approval to run a gated command ("${hit}"): ${approval.id}
+`);
+        const answer = await waitForApproval(dev, approval.id, controller.signal);
+        if (answer === null) {
+          return finish(dev, task, execution, { status: "cancelled", exitCode: null, error: "cancelled while waiting for approval", changedFiles: [], summary: "", commandLine: null, usage: null }, {
+            kind: "cancelled",
+            reason: "Cancelled while waiting for approval to run a gated command",
+            nextAction: "Retry when ready: dev task retry " + task.id,
+          });
+        }
+        if (answer.status === "denied") {
+          return finish(dev, task, execution, { status: "failed", exitCode: null, error: "approval denied", changedFiles: [], summary: answer.note ?? "", commandLine: null, usage: null }, {
+            kind: "approval-denied",
+            reason: `You declined to run "${hit}"${answer.note ? `: ${answer.note}` : ""}`,
+            nextAction: `Change the command, or approve it next time: dev task retry ${task.id}`,
+          });
+        }
+        append(`# approved${answer.note ? `: ${answer.note}` : ""}
+`);
+      }
+    }
+
     // ----- run -----
     const timeoutMs = options.timeoutMs ?? timeoutFor(worker.type, dev.config.workers, previousFailure);
     dev.events.emit("COMMAND_STARTED", { projectId: project.id, taskId: task.id, executionId: execution.id, data: { workerId: worker.id, command: current.command ?? worker.id, timeoutMs } });
@@ -395,4 +426,15 @@ export function capabilityFor(task: Task): WorkerCapability {
   if (task.kind === "decision" || task.kind === "epic") return "plan";
   if (task.kind === "prep") return "research";
   return "code";
+}
+
+/** Poll an approval until a person resolves it or the run is cancelled. */
+async function waitForApproval(dev: Dev, approvalId: string, signal: AbortSignal): Promise<{ status: "approved" | "denied"; note: string | null } | null> {
+  for (;;) {
+    if (signal.aborted) return null;
+    const current = dev.approvals.get(approvalId);
+    if (!current) return null;
+    if (current.status === "approved" || current.status === "denied") return { status: current.status, note: current.note };
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
 }

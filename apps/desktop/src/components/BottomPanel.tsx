@@ -138,7 +138,7 @@ export function BottomPanel() {
                         ?
                       </td>
                       <td style={{ width: 280 }} className="ellipsis" title={a.reason}>
-                        {a.action === "human-input" ? "DEV asks" : a.action === "git.commit" ? "Commit (approving commits it)" : a.action === "git.push" ? "Push (approving pushes it)" : a.action}
+                        {a.action === "human-input" ? "DEV asks" : a.action === "git.commit" ? "Commit (approving commits it)" : a.action === "git.push" ? "Push (approving pushes it)" : a.action === "run-command" ? "Run a gated command" : a.action}
                         {a.taskId && (
                           <>
                             {" "}
