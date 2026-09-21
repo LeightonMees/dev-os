@@ -272,3 +272,61 @@ test("a human step waits for the person's answer, hands the answer on, and a dec
     repo.cleanup();
   }
 });
+
+test("a repeat arrow re-runs earlier steps while its branch keeps choosing it, and stops at its limit", async () => {
+  const { dev, cleanup } = openTestDev();
+  const repo = tempRepo();
+  try {
+    const project = dev.projects.add({ path: repo.path, name: "loops" });
+    // "attempt" bumps a counter file and prints the new value; "enough?" asks whether it has reached 3.
+    const bump = `${nodeExe} -e "const fs=require('fs');const n=(fs.existsSync('n')?Number(fs.readFileSync('n','utf8')):0)+1;fs.writeFileSync('n',String(n));console.log(n)"`;
+    const flow = dev.flows.create({
+      projectId: project.id,
+      name: "retry until three",
+      nodes: [
+        { id: "a", kind: "shell", label: "attempt", x: 0, y: 0, command: bump },
+        { id: "c", kind: "condition", label: "enough?", x: 200, y: 0, expression: "attempt.output == 3" },
+        { id: "d", kind: "shell", label: "done", x: 400, y: 0, command: `${nodeExe} -e "require('fs').writeFileSync('done.txt','after {{attempt.output}} attempts')"` },
+      ],
+      edges: [
+        edge("a", "c"),
+        { id: "again", from: "c", to: "a", when: "false", loop: true, maxLoops: 10 },
+        { id: "onward", from: "c", to: "d", when: "true" },
+      ],
+    });
+    assert.deepEqual(dev.flows.problems(flow.id), [], "a repeat arrow is not a forbidden cycle");
+
+    const report = await runFlow(dev, { flowId: flow.id });
+    assert.equal(report.status, "PASSED", report.detail ?? "");
+    assert.equal(readFileSync(join(repo.path, "n"), "utf8"), "3", "attempt ran three times");
+    assert.equal(readFileSync(join(repo.path, "done.txt"), "utf8"), "after 3 attempts", "the step after the loop saw the last attempt's output");
+    assert.equal(report.steps.filter((s) => s.nodeId === "a").length, 3);
+    assert.equal(report.steps.filter((s) => s.nodeId === "d").length, 1, "the exit ran once");
+    const runs = dev.flows.nodeRuns(dev.flows.runs(flow.id)[0]!.id);
+    assert.equal(runs.filter((r) => r.nodeId === "a" && r.status === "PASSED").length, 3, "every repetition is recorded");
+
+    // A loop that never satisfies its exit stops at the limit and the run still finishes.
+    const stubborn = dev.flows.create({
+      projectId: project.id,
+      name: "never enough",
+      nodes: [
+        { id: "a", kind: "shell", label: "attempt", x: 0, y: 0, command: `${nodeExe} -e "console.log('no')"` },
+        { id: "c", kind: "condition", label: "enough?", x: 200, y: 0, expression: "attempt.output == yes" },
+        { id: "d", kind: "shell", label: "done", x: 400, y: 0, command: `${nodeExe} -e "console.log('exit')"` },
+      ],
+      edges: [edge("a", "c"), { id: "again", from: "c", to: "a", when: "false", loop: true, maxLoops: 2 }, { id: "onward", from: "c", to: "d", when: "true" }],
+    });
+    const capped = await runFlow(dev, { flowId: stubborn.id });
+    assert.equal(capped.status, "PASSED");
+    assert.equal(capped.steps.filter((s) => s.nodeId === "a" && s.status === "PASSED").length, 3, "one run plus two repeats");
+    assert.ok(capped.steps.some((s) => /repeat limit of 2 reached/.test(s.detail ?? "")), "the run says why it stopped repeating");
+    assert.equal(capped.steps.filter((s) => s.nodeId === "d" && s.status === "PASSED").length, 0, "the true branch never fired, so the exit step never ran");
+
+    // A repeat arrow that does not point backwards is a drawing mistake, and the validator says so.
+    const wrong = dev.flows.create({ projectId: project.id, name: "not a loop", nodes: [{ id: "a", kind: "shell", label: "a", x: 0, y: 0, command: "echo" }, { id: "b", kind: "shell", label: "b", x: 0, y: 0, command: "echo" }], edges: [{ id: "x", from: "a", to: "b", loop: true }] });
+    assert.match(dev.flows.problems(wrong.id).map((p) => p.message).join("\n"), /must point back to an earlier step/);
+  } finally {
+    cleanup();
+    repo.cleanup();
+  }
+});

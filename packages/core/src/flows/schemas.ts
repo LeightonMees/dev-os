@@ -13,8 +13,8 @@
 //   * `human`     — a question for the person; the run waits in Attention until they answer, and
 //                   the answer is this step's output for later steps to use
 //
-// Loop nodes are the next kind; they are deliberately absent rather than present and inert, so
-// nothing in the editor is a control that cannot work.
+// Loops are arrows, not nodes: a repeat arrow points back to an earlier step and is followed up to
+// its limit while the branch it hangs off keeps choosing it.
 
 export const FLOW_NODE_KINDS = ["shell", "prompt", "condition", "human"] as const;
 export type FlowNodeKind = (typeof FLOW_NODE_KINDS)[number];
@@ -71,6 +71,13 @@ export interface FlowEdge {
    * An edge out of a condition with no branch set is a defect the validator reports.
    */
   when?: "true" | "false" | null;
+  /**
+   * A repeat arrow: following it re-runs its target and everything after it, up to `maxLoops`
+   * times (default 10), after which the arrow is simply not taken and the run continues past it.
+   * The only kind of arrow allowed to point backwards.
+   */
+  loop?: boolean;
+  maxLoops?: number | null;
 }
 
 export interface Flow {
@@ -143,13 +150,19 @@ export function validateFlow(flow: Pick<Flow, "nodes" | "edges">): FlowProblem[]
   for (const edge of flow.edges) {
     if (!ids.has(edge.from)) problems.push({ nodeId: null, edgeId: edge.id, message: "An arrow starts from a step that no longer exists." });
     if (!ids.has(edge.to)) problems.push({ nodeId: null, edgeId: edge.id, message: "An arrow points at a step that no longer exists." });
+    if (edge.loop && ids.has(edge.from) && ids.has(edge.to) && !reaches(flow, edge.to, edge.from)) {
+      problems.push({ nodeId: null, edgeId: edge.id, message: `A repeat arrow must point back to an earlier step: nothing leads from "${flow.nodes.find((n) => n.id === edge.to)?.label ?? edge.to}" to "${flow.nodes.find((n) => n.id === edge.from)?.label ?? edge.from}".` });
+    }
+    if (edge.loop && edge.maxLoops != null && (!Number.isInteger(edge.maxLoops) || edge.maxLoops < 1)) {
+      problems.push({ nodeId: null, edgeId: edge.id, message: "A repeat arrow's limit must be a whole number of at least 1." });
+    }
   }
 
   for (const id of findCycle(flow)) {
-    problems.push({ nodeId: id, edgeId: null, message: "These steps form a loop. Flows run forwards only until loop steps exist." });
+    problems.push({ nodeId: id, edgeId: null, message: "These steps form a cycle. Only a repeat arrow may point backwards: mark the arrow that closes the loop as a repeat." });
   }
 
-  const starts = flow.nodes.filter((n) => !flow.edges.some((e) => e.to === n.id));
+  const starts = flow.nodes.filter((n) => !flow.edges.some((e) => e.to === n.id && !e.loop));
   if (flow.nodes.length > 0 && starts.length === 0) problems.push({ nodeId: null, edgeId: null, message: "Every step has something before it, so there is nowhere to start." });
 
   return problems;
@@ -170,7 +183,8 @@ export function findCycle(flow: Pick<Flow, "nodes" | "edges">): string[] {
     }
     state.set(id, "open");
     stack.push(id);
-    for (const edge of flow.edges.filter((e) => e.from === id)) visit(edge.to);
+    // Repeat arrows are meant to point backwards; only the other arrows must form a DAG.
+    for (const edge of flow.edges.filter((e) => e.from === id && !e.loop)) visit(edge.to);
     stack.pop();
     state.set(id, "done");
   };
@@ -178,7 +192,34 @@ export function findCycle(flow: Pick<Flow, "nodes" | "edges">): string[] {
   return [...inCycle];
 }
 
-/** Steps with nothing before them: where a run begins. */
+/** Steps with nothing before them (repeat arrows do not count): where a run begins. */
 export function startNodes(flow: Pick<Flow, "nodes" | "edges">): FlowNode[] {
-  return flow.nodes.filter((n) => !flow.edges.some((e) => e.to === n.id));
+  return flow.nodes.filter((n) => !flow.edges.some((e) => e.to === n.id && !e.loop));
+}
+
+/** True when `to` is reachable from `from` along ordinary (non-repeat) arrows. */
+export function reaches(flow: Pick<Flow, "edges">, from: string, to: string): boolean {
+  const seen = new Set<string>();
+  const queue = [from];
+  while (queue.length > 0) {
+    const id = queue.shift() as string;
+    if (id === to) return true;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    for (const edge of flow.edges) if (edge.from === id && !edge.loop) queue.push(edge.to);
+  }
+  return false;
+}
+
+/** Every step reachable from `start` along ordinary arrows, `start` included: what a repeat re-arms. */
+export function downstream(flow: Pick<Flow, "edges">, start: string): Set<string> {
+  const seen = new Set<string>();
+  const queue = [start];
+  while (queue.length > 0) {
+    const id = queue.shift() as string;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    for (const edge of flow.edges) if (edge.from === id && !edge.loop) queue.push(edge.to);
+  }
+  return seen;
 }

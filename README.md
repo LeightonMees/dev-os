@@ -60,8 +60,8 @@ other immediately.
 | **Work** — every task by status. Drag between the columns the state machine allows; the rest explain why they refuse. | **Graph** — columns are dependency depth, so work reads left to right. |
 | ![Workers and their health](docs/screenshots/workers.png) | ![The artifact zone](docs/screenshots/artifacts.png) |
 | **Workers** — 16 of them, which are healthy, and the real reason the rest are not. | **Artifacts** — every file a run produced, rendered in place and editable. |
-| ![A GLB mesh in the 3D viewport](docs/screenshots/model.png) | |
-| **3D viewport** — GLB/GLTF artifacts drawn as meshes: orbit, zoom, pan, with counts read from the loaded scene. | |
+| ![A GLB mesh in the 3D viewport](docs/screenshots/model.png) | ![A flow with a repeat arrow and an Ask-me step](docs/screenshots/flows.png) |
+| **3D viewport** — GLB/GLTF artifacts drawn as meshes: orbit, zoom, pan, with counts read from the loaded scene. | **Flows** — commands, prompts, conditions, repeat arrows and "Ask me" steps, drawn and run from the same graph. |
 
 ## What makes it different
 

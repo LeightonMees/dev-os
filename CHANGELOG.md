@@ -7,6 +7,10 @@ All notable changes to DEV are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Repeat arrows in flows.** An arrow marked *repeat* may point back at an earlier step; following
+  it re-runs that step and everything after it, up to a limit (default 10), after which the run
+  carries on past it. Ordinary arrows must still form a DAG, and the editor says which arrow closes a
+  cycle. With conditions and "Ask me" steps this completes the flow editor's first version.
 - The first-run guide ends with a step on the three safety settings (worktree isolation, gated
   commands, gated pushes/commits), so a new user decides how much to trust autopilot before using it.
 

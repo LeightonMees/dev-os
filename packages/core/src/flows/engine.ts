@@ -2,7 +2,7 @@ import type { Dev } from "../dev.ts";
 import type { ReasoningEffort } from "../schemas.ts";
 
 import { evaluateCondition, FlowExpressionError, interpolate, type StepResult } from "./expressions.ts";
-import { startNodes, validateFlow, type Flow, type FlowNode, type FlowRunStatus } from "./schemas.ts";
+import { downstream, startNodes, validateFlow, type Flow, type FlowNode, type FlowRunStatus } from "./schemas.ts";
 
 export interface RunFlowOptions {
   flowId: string;
@@ -59,8 +59,10 @@ export async function runFlow(dev: Dev, options: RunFlowOptions): Promise<FlowRu
   const byId = new Map(flow.nodes.map((n) => [n.id, n]));
   /** Edges whose branch was actually taken. Local to this run: two runs must never see each other. */
   const fired = new Set<string>();
-  /** Edges that must have fired for a node to be reachable at all. */
-  const incoming = (id: string) => flow.edges.filter((e) => e.to === id);
+  /** Edges that must have fired for a node to be reachable at all. Repeat arrows do not gate. */
+  const incoming = (id: string) => flow.edges.filter((e) => e.to === id && !e.loop);
+  /** How many times each repeat arrow has been followed this run. */
+  const loops = new Map<string, number>();
 
   try {
     let queue = startNodes(flow).map((n) => n.id);
@@ -120,6 +122,28 @@ export async function runFlow(dev: Dev, options: RunFlowOptions): Promise<FlowRu
       // opens all of them.
       for (const edge of flow.edges.filter((e) => e.from === nodeId)) {
         const taken = node.kind === "condition" ? edge.when === (outcome.branch ? "true" : "false") : true;
+        if (edge.loop) {
+          // A repeat arrow re-arms its target and everything after it, up to its limit. Past the
+          // limit it is simply not followed, and the run carries on along the other arrows.
+          if (!taken) continue;
+          const count = loops.get(edge.id) ?? 0;
+          const limit = edge.maxLoops ?? 10;
+          if (count >= limit) {
+            const target = byId.get(edge.to);
+            report.push({ nodeId: edge.to, label: target?.label ?? edge.to, status: "SKIPPED", output: "", detail: `repeat limit of ${limit} reached; not repeating` });
+            options.onStep?.({ nodeId: edge.to, label: target?.label ?? edge.to, status: "SKIPPED", detail: `repeat limit of ${limit} reached` });
+            continue;
+          }
+          loops.set(edge.id, count + 1);
+          for (const id of downstream(flow, edge.to)) {
+            done.delete(id);
+            skipped.delete(id);
+            for (const inner of flow.edges) if (inner.from === id) fired.delete(inner.id);
+          }
+          options.onStep?.({ nodeId: edge.to, label: byId.get(edge.to)?.label ?? edge.to, status: "RUNNING", detail: `repeat ${count + 1} of at most ${limit}` });
+          queue.push(edge.to);
+          continue;
+        }
         if (taken) fired.add(edge.id);
         queue.push(edge.to);
       }

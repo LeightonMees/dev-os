@@ -2298,3 +2298,7 @@ ul.bullets.editable {
 
 /* An "Ask me" step is where a run stops for a person: mark it as such. */
 .flow-node.human { border-left: 3px solid var(--warn); }
+
+/* A repeat arrow is a promise to go back: draw it as one. */
+.wire.loop path { stroke-dasharray: 6 4; stroke: var(--warn); }
+.wire.loop text { fill: var(--warn); }

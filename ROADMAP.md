@@ -9,7 +9,6 @@ Kept deliberately small. Long-term ideas live here as one line each, not as tick
 
 ## NEXT
 
-- Interactive flows: n8n-style workflows of shell commands, AI prompts, human inputs, conditions and loops, with a canvas and a live run view (Executable Agent Workflows, "Flow editor V1").
 - Approval gates on a project-defined list of consequential commands (deploys, migrations); commits and pushes are gated today.
 
 ## LATER

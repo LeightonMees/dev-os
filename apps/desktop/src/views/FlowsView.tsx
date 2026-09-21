@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Icon } from "../components/Icon.tsx";
-import type { Flow, FlowNode, FlowNodeRun, FlowProblem, FlowRun } from "../lib/api.ts";
+import type { Flow, FlowEdge, FlowNode, FlowNodeRun, FlowProblem, FlowRun } from "../lib/api.ts";
 import { useStore } from "../lib/store.tsx";
 
 const NODE_WIDTH = 190;
@@ -144,12 +144,13 @@ export function FlowsView() {
       const node: FlowNode = {
         id: newId(kind === "condition" ? "cond" : kind === "prompt" ? "ask" : "run"),
         kind,
-        label: kind === "shell" ? "New command" : kind === "prompt" ? "New prompt" : "New condition",
+        label: kind === "shell" ? "New command" : kind === "prompt" ? "New prompt" : kind === "human" ? "New question" : "New condition",
         x,
         y,
         ...(kind === "shell" ? { command: "" } : {}),
         ...(kind === "prompt" ? { prompt: "", capability: "code", workerId: null } : {}),
         ...(kind === "condition" ? { expression: "" } : {}),
+        ...(kind === "human" ? { prompt: "" } : {}),
       };
       setSelectedNode(node.id);
       return { ...f, nodes: [...f.nodes, node] };
@@ -289,17 +290,26 @@ export function FlowsView() {
                 const to = flow.nodes.find((n) => n.id === edge.to);
                 if (!from || !to) return null;
                 const a = anchors(from, to);
+                // A repeat arrow goes back the way it came; drawn as a dip beneath the steps so it
+                // never lies on top of the forward wire between the same two nodes.
+                const loopY = Math.max(from.y, to.y) + NODE_HEIGHT + 70;
+                const path = edge.loop
+                  ? `M ${from.x + NODE_WIDTH / 2} ${from.y + NODE_HEIGHT} C ${from.x + NODE_WIDTH / 2} ${loopY}, ${to.x + NODE_WIDTH / 2} ${loopY}, ${to.x + NODE_WIDTH / 2} ${to.y + NODE_HEIGHT}`
+                  : wirePath(a.x1, a.y1, a.x2, a.y2);
+                const labelX = edge.loop ? (from.x + to.x + NODE_WIDTH) / 2 : (a.x1 + a.x2) / 2;
+                const labelY = edge.loop ? loopY - 14 : (a.y1 + a.y2) / 2 - 6;
                 return (
-                  <g key={edge.id} className={`wire${edge.when ? ` ${edge.when}` : ""}`}>
-                    <path d={wirePath(a.x1, a.y1, a.x2, a.y2)} />
-                    {edge.when && (
-                      <text x={(a.x1 + a.x2) / 2} y={(a.y1 + a.y2) / 2 - 6} textAnchor="middle">
-                        {edge.when}
+                  <g key={edge.id} className={`wire${edge.when ? ` ${edge.when}` : ""}${edge.loop ? " loop" : ""}`}>
+                    <path d={path} />
+                    {(edge.when || edge.loop) && (
+                      <text x={labelX} y={labelY} textAnchor="middle">
+                        {edge.loop ? `↺ ${edge.when ?? ""} ×${edge.maxLoops ?? 10}`.trim() : edge.when}
                       </text>
                     )}
                     <title>
                       {from.label} → {to.label}
                       {edge.when ? ` (${edge.when})` : ""}
+                      {edge.loop ? ` — repeat, at most ${edge.maxLoops ?? 10} times` : ""}
                     </title>
                   </g>
                 );
@@ -363,6 +373,7 @@ export function FlowsView() {
                 onChange={(patch) => mutate((f) => ({ ...f, nodes: f.nodes.map((n) => (n.id === node.id ? { ...n, ...patch } : n)) }))}
                 onRemove={() => removeNode(node.id)}
                 onRemoveEdge={(edgeId) => mutate((f) => ({ ...f, edges: f.edges.filter((e) => e.id !== edgeId) }))}
+                onEditEdge={(edgeId, patch) => mutate((f) => ({ ...f, edges: f.edges.map((e) => (e.id === edgeId ? { ...e, ...patch } : e)) }))}
               />
             ) : (
               <RunHistory runs={runs} active={activeRun} onOpen={(id) => void api.flowRun(id).then(setActiveRun)} />
@@ -382,6 +393,7 @@ function NodeEditor({
   onChange,
   onRemove,
   onRemoveEdge,
+  onEditEdge,
 }: {
   node: FlowNode;
   flow: Flow;
@@ -389,6 +401,7 @@ function NodeEditor({
   onChange: (patch: Partial<FlowNode>) => void;
   onRemove: () => void;
   onRemoveEdge: (edgeId: string) => void;
+  onEditEdge: (edgeId: string, patch: Partial<FlowEdge>) => void;
 }) {
   const { status } = useStore();
   const incoming = flow.edges.filter((e) => e.to === node.id);
@@ -492,9 +505,29 @@ function NodeEditor({
         {outgoing.map((e) => (
           <div key={e.id} className="row">
             <span>
-              → {label(e.to)}
+              {e.loop ? "↺" : "→"} {label(e.to)}
               {e.when ? ` (${e.when})` : ""}
             </span>
+            {/* A repeat arrow points back at an earlier step and is followed up to its limit. */}
+            <button
+              className={`btn ghost small${e.loop ? " active" : ""}`}
+              onClick={() => onEditEdge(e.id, { loop: !e.loop, maxLoops: e.loop ? null : (e.maxLoops ?? 10) })}
+              title={e.loop ? "Make this an ordinary arrow" : "Make this a repeat arrow: following it re-runs its target and everything after it, up to a limit"}
+            >
+              repeat
+            </button>
+            {e.loop && (
+              <input
+                className="input mono"
+                style={{ width: 56 }}
+                type="number"
+                min={1}
+                value={e.maxLoops ?? 10}
+                aria-label="Repeat limit"
+                title="How many times at most this arrow is followed in one run"
+                onChange={(ev) => onEditEdge(e.id, { maxLoops: Math.max(1, Math.floor(Number(ev.target.value) || 1)) })}
+              />
+            )}
             <button className="btn ghost small" onClick={() => onRemoveEdge(e.id)} title="Remove this arrow">
               <Icon name="x" />
             </button>
