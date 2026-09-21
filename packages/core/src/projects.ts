@@ -123,8 +123,11 @@ export class ProjectStore {
     const name = input.name.trim();
     if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)) throw new Error(`Project name "${name}" must be letters, digits, dot, dash or underscore`);
     const dir = resolve(input.dir);
-    if (!existsSync(dir)) throw new Error(`Parent directory does not exist: ${dir}`);
     if (/onedrive/i.test(dir)) throw new Error("Refusing to create a project under OneDrive; choose a local directory");
+    // The parent is the place the user (or the default setting) named for their
+    // projects. On a fresh machine it does not exist yet; making it is the job,
+    // not an error to hand back.
+    mkdirSync(dir, { recursive: true });
     const path = join(dir, name);
     if (existsSync(path) && readdirSync(path).length > 0) throw new Error(`${path} already exists and is not empty. Register it instead of creating it.`);
     mkdirSync(path, { recursive: true });

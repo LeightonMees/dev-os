@@ -34,6 +34,8 @@ All notable changes to DEV are recorded here. The format follows
   spawning `node` with no script and reporting "Nexus exited (0)".
 - Nexus-backed endpoints answer 503 rather than 500 when Nexus is absent: unavailable, not broken.
 - Path placeholders in the project dialogs no longer show the maintainer's drive.
+- `dev project new` on a fresh machine failed with "Parent directory does not exist" because the
+  default project directory had never been created. It is created now; OneDrive is still refused.
 - `runnable()` no longer stops at the first 500 READY tasks; a large queue could leave work that never
   ran and never said why.
 

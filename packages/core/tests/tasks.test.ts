@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
 
 import { TRANSITIONS, canTransition, TASK_STATUSES } from "../src/index.ts";
-import { openTestDev } from "./helpers.ts";
+import { openTestDev, tempRoot } from "./helpers.ts";
 
 test("every status has a transition row and DONE is only reachable with evidence", () => {
   for (const status of TASK_STATUSES) assert.ok(Array.isArray(TRANSITIONS[status]));
@@ -96,6 +98,24 @@ test("projects resolve by id, name and path and reject duplicates", () => {
     assert.equal(updated.config.reviewRequired, true);
     dev.projects.remove(project.id);
     assert.equal(dev.projects.list().length, 0);
+  } finally {
+    cleanup();
+  }
+});
+
+test("creating a project makes its parent directory when the chosen place does not exist yet", () => {
+  const { dev, cleanup } = openTestDev();
+  const base = tempRoot();
+  try {
+    // A fresh machine: the default project directory has never been created.
+    const parent = join(base, "Projects", "nested");
+    assert.ok(!existsSync(parent));
+    const project = dev.projects.create({ name: "first", dir: parent, template: "empty", git: false });
+    assert.equal(project.path, join(parent, "first"));
+    assert.ok(existsSync(join(parent, "first", "README.md")), "the template landed");
+    // Cloud-synced folders are still refused, whatever the reason for choosing them.
+    assert.throws(() => dev.projects.create({ name: "x", dir: join(base, "OneDrive", "stuff"), template: "empty", git: false }), /OneDrive/);
+    assert.ok(!existsSync(join(base, "OneDrive")), "and nothing was created there");
   } finally {
     cleanup();
   }
