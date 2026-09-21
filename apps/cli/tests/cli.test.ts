@@ -124,3 +124,31 @@ test("artifacts are listable project-wide and inspectable by id", () => {
     rmSync(repo, { recursive: true, force: true });
   }
 });
+
+test("flows drawn in the app can be listed, inspected and run headless from the CLI", () => {
+  const home = tempRoot();
+  const repo = tempRoot();
+  try {
+    execFileSync("git", ["init", "-q", "-b", "main"], { cwd: repo });
+    writeFileSync(join(repo, "README.md"), "# t\n");
+    const project = JSON.parse(dev(home, ["project", "add", repo, "--name", "flowy", "--json"]).out) as { id: string };
+    assert.match(dev(home, ["flow", "list", "--project", project.id]).out, /No flows/);
+
+    // Flows are authored in the app; seed one the way the control plane would store it.
+    const flowId = execFileSync(process.execPath, [resolve("apps/cli/tests/seed-flow.mjs"), home, project.id, `${nodeExe} -e "console.log('hello from a flow')"`], { encoding: "utf8" }).trim();
+
+    const listed = JSON.parse(dev(home, ["flow", "list", "--project", project.id, "--json"]).out) as { id: string; name: string }[];
+    assert.equal(listed[0]?.id, flowId);
+    assert.match(dev(home, ["flow", "show", "greet", "--project", project.id]).out, /say\s+shell/);
+
+    const run = dev(home, ["flow", "run", flowId, "--project", project.id]);
+    assert.match(run.out, /say\s+passed/);
+    assert.match(run.out, /greet passed \(1 steps\)/);
+    const runs = JSON.parse(dev(home, ["flow", "runs", flowId, "--json"]).out) as { status: string; steps: { output: string }[] }[];
+    assert.equal(runs[0]?.status, "PASSED");
+    assert.match(runs[0]?.steps[0]?.output ?? "", /hello from a flow/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true });
+  }
+});

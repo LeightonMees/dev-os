@@ -3,6 +3,7 @@ import { openContext, type CliContext } from "./context.ts";
 import { planCommand } from "./commands/plan.ts";
 import { projectCommand } from "./commands/project.ts";
 import { autoCommand } from "./commands/run.ts";
+import { flowCommand } from "./commands/flow.ts";
 import { approvalsCommand, chatCommand, configCommand, controlPlaneCommand, decisionCommand, artifactsCommand, doctorCommand, eventsCommand, welcomeCommand, gitCommand, keysCommand, resourcesCommand, statusCommand, uiCommand, versionCommand, workersCommand } from "./commands/system.ts";
 import { taskCommand } from "./commands/task.ts";
 import { c, eprintln, println } from "./output.ts";
@@ -45,6 +46,7 @@ ${c.dim("STATE")}
   dev status                       everything at a glance
   dev events [--follow] [--task <id>] [--type A,B]
   dev artifacts [<taskId>] [--kind diff|log|report|test-result]   files runs produced; dev artifacts show <id>
+  dev flow list|show|run|runs <id|name>   flows drawn in the app, run headless from here
   dev git status|diff|log|branch [name]|commit "<msg>" [--task <id>]
   dev decision list | add "<title>" --reason .. --tags a,b
   dev approvals [approve|deny <id>]
@@ -153,6 +155,9 @@ export async function main(argv: string[]): Promise<number> {
       case "artifacts":
       case "artifact":
         return await artifactsCommand(ctx, sub, rest);
+      case "flow":
+      case "flows":
+        return await flowCommand(ctx, sub, rest);
       case "git":
         return await gitCommand(ctx, sub, rest);
       case "decision":
